@@ -1,4 +1,5 @@
 """NoMoreBot - Track your activities."""
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -6,6 +7,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from db import get_history, init_db, record_event
+
+logger = logging.getLogger(__name__)
 
 WELCOME = "NoMoreBot - Track your activities"
 
@@ -47,6 +50,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 def main() -> None:
+    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        level=getattr(logging, log_level, logging.INFO),
+    )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     load_dotenv()
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
@@ -55,7 +66,7 @@ def main() -> None:
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_callback))
-    print("Starting bot...")
+    logger.info("Starting bot (LOG_LEVEL=%s)...", log_level)
     app.run_polling()
 
 
