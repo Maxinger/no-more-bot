@@ -36,7 +36,15 @@ def format_history(records: list) -> str:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    logger.info(
+        "PROCESS /start user_id=%s username=%r chat_id=%s",
+        user.id if user else None,
+        user.username if user else None,
+        update.effective_chat.id if update.effective_chat else None,
+    )
     await update.message.reply_text(WELCOME, reply_markup=KEYBOARD)
+    logger.debug("PROCESS /start done: sent welcome + keyboard")
 
 
 async def log_incoming_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -79,19 +87,24 @@ async def log_incoming_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    await query.answer()
     user_id = update.effective_user.id
+    logger.info("PROCESS callback data=%r user_id=%s", query.data, user_id)
+    await query.answer()
 
     if query.data == "record":
         recorded_at = record_event(user_id)
         text = f"Recorded: {recorded_at.strftime('%Y-%m-%d %H:%M')}"
+        logger.info("PROCESS record stored recorded_at=%s", recorded_at)
     elif query.data == "history":
         records = get_history(user_id, days=14)
         text = format_history(records)
+        logger.info("PROCESS history rows=%d", len(records))
     else:
+        logger.warning("PROCESS callback ignored unknown data=%r", query.data)
         return
 
     await query.edit_message_text(text=text, reply_markup=KEYBOARD)
+    logger.debug("PROCESS callback done: edited message")
 
 
 def main() -> None:
