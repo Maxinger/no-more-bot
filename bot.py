@@ -4,6 +4,7 @@ import os
 
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -103,7 +104,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.warning("PROCESS callback ignored unknown data=%r", query.data)
         return
 
-    await query.edit_message_text(text=text, reply_markup=KEYBOARD)
+    try:
+        await query.edit_message_text(text=text, reply_markup=KEYBOARD)
+    except BadRequest as e:
+        # Telegram throws this when the new content+markup are identical to the current message
+        # (e.g., user presses the same button again quickly and our formatted text doesn't change).
+        if "Message is not modified" in str(e):
+            logger.info("PROCESS callback ignored: message not modified (data=%r user_id=%s)", query.data, user_id)
+            return
+        raise
     logger.debug("PROCESS callback done: edited message")
 
 
