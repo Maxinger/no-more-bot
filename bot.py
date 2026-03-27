@@ -14,9 +14,12 @@ from telegram.ext import (
     filters,
 )
 
-from db import get_history, init_db, record_event
+from application.tracking_service import TrackingService
+from domain.model.record import Activity, Record
+from infra.tracker.in_memory import InMemoryTracker
 
 logger = logging.getLogger(__name__)
+tracking_service = TrackingService(InMemoryTracker())
 
 WELCOME = "NoMoreBot - Track your activities"
 
@@ -28,11 +31,11 @@ KEYBOARD = InlineKeyboardMarkup([
 ])
 
 
-def format_history(records: list) -> str:
+def format_history(records: list[Record]) -> str:
     """Format history records as date + time per line."""
     if not records:
         return "No records for the last 14 days."
-    lines = [f"{r.strftime('%Y-%m-%d')}  {r.strftime('%H:%M')}" for r in records]
+    lines = [f"{r.timestamp.strftime('%Y-%m-%d')}  {r.timestamp.strftime('%H:%M')}" for r in records]
     return "\n".join(lines)
 
 
@@ -93,11 +96,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.answer()
 
     if query.data == "record":
-        recorded_at = record_event(user_id)
-        text = f"Recorded: {recorded_at.strftime('%Y-%m-%d %H:%M')}"
-        logger.info("PROCESS record stored recorded_at=%s", recorded_at)
+        record = tracking_service.record(user_id, Activity.BED)
+        text = f"Recorded: {record.timestamp.strftime('%Y-%m-%d %H:%M')}"
+        logger.info("PROCESS record stored recorded_at=%s activity=%s", record.timestamp, Activity.BED.value)
     elif query.data == "history":
-        records = get_history(user_id, days=14)
+        records = tracking_service.history(user_id, days=14)
         text = format_history(records)
         logger.info("PROCESS history rows=%d", len(records))
     else:
@@ -129,7 +132,6 @@ def main() -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise SystemExit("Set TELEGRAM_BOT_TOKEN in environment or .env")
-    init_db()
     app = Application.builder().token(token).build()
     # Group -1 runs first: log all incoming messages and callback queries
     app.add_handler(MessageHandler(filters.ALL, log_incoming_message), group=-1)
