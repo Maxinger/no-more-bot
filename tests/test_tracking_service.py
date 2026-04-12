@@ -20,6 +20,17 @@ class TrackingServiceTest(unittest.TestCase):
 
         self.assertEqual(history[:2], [second, first])
 
+    def test_record_accepts_explicit_timestamp(self) -> None:
+        tracker = InMemoryTracker()
+        service = TrackingService(tracker)
+        user_id = int(time.time() * 1000) % 1_000_000_000
+        timestamp = datetime.datetime(2026, 4, 11, 21, 45, tzinfo=datetime.timezone.utc)
+
+        record = service.record(user_id, Activity.HOME, timestamp)
+
+        self.assertEqual(record.timestamp, timestamp)
+        self.assertEqual(tracker.events[-1], record)
+
     def test_history_can_be_filtered_by_activity(self) -> None:
         tracker = InMemoryTracker()
         service = TrackingService(tracker)

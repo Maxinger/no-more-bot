@@ -21,8 +21,13 @@ class TrackingService:
     def __init__(self, tracker: Tracker):
         self.tracker = tracker
 
-    def record(self, user_id: int, activity: Activity) -> Record:
-        return self.tracker.record(user_id, activity)
+    def record(
+        self,
+        user_id: int,
+        activity: Activity,
+        timestamp: datetime.datetime | None = None,
+    ) -> Record:
+        return self.tracker.record(user_id, activity, timestamp)
 
     def history(
         self,
@@ -46,6 +51,6 @@ class TrackingService:
         return self.tracker.get_goal(activity, ws)
 
     def get_goals(
-        self, activity: Activity, limit: int = 10
+        self, activity: Activity, limit: int | None = 10
     ) -> list[tuple[datetime.date, datetime.time]]:
         return self.tracker.get_goals(activity, limit)

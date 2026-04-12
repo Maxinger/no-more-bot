@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-from domain.model.record import Activity, Record
 import datetime
+
+from domain.model.record import Activity, Record
 
 
 class Tracker:
-    def record(self, user_id: int, activity: Activity) -> Record:
+    def record(
+        self,
+        user_id: int,
+        activity: Activity,
+        timestamp: datetime.datetime | None = None,
+    ) -> Record:
         """Persist one activity record and return the saved record."""
         raise NotImplementedError
 
@@ -29,7 +35,7 @@ class Tracker:
         raise NotImplementedError
 
     def get_goals(
-        self, activity: Activity, limit: int = 10
+        self, activity: Activity, limit: int | None = 10
     ) -> list[tuple[datetime.date, datetime.time]]:
         """Return up to ``limit`` (week start, goal time) pairs for ``activity``, oldest week first."""
         raise NotImplementedError
