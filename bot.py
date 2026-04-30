@@ -1,5 +1,6 @@
 """NoMoreBot - Track your activities."""
 import datetime
+import html
 import logging
 import os
 from typing import Any
@@ -201,44 +202,128 @@ def current_goal_summary(activity: Activity) -> str:
     return f"Current goal for {activity_name(activity)}: {goal.strftime('%H:%M')} ({format_goal_week_label(week)})."
 
 
-def format_current_week_goals_lines() -> str:
-    """Home and Bed goal times for the current UTC week, or '(not set)'."""
-    week = monday_of_week_containing(current_utc_datetime().date())
-    lines: list[str] = []
-    for activity in (Activity.HOME, Activity.BED):
-        try:
-            goal = tracking_service.get_goal(activity, week_start=week)
-            lines.append(f"{activity_icon(activity)} {activity_name(activity)}: {goal.strftime('%H:%M')}")
-        except KeyError:
-            lines.append(f"{activity_icon(activity)} {activity_name(activity)}: (not set)")
-    return "\n".join(lines)
-
-
 def format_report_line(day: datetime.date, label: str, time_value: datetime.time) -> str:
     return f"{day.strftime('%d.%m.%Y')}{label}: {time_value.strftime('%H:%M')}"
 
 
-def format_activity_report(user_id: int, activity: Activity) -> str:
-    goals = [
-        (week_start, 0, goal_time, format_report_line(week_start, " goal", goal_time))
-        for week_start, goal_time in tracking_service.get_goals(activity, limit=None)
-    ]
-    records = []
+def minutes_since_midnight(time_value: datetime.time) -> int:
+    return time_value.hour * 60 + time_value.minute
+
+
+def format_signed_minutes(minutes: int) -> str:
+    if minutes == 0:
+        return "0"
+    return f"{minutes:+d}"
+
+
+def report_day(activity: Activity, timestamp: datetime.datetime) -> datetime.date:
+    return activity_day(activity, timestamp)
+
+
+def goal_delta_minutes(activity: Activity, goal_time: datetime.time, actual_time: datetime.time) -> int:
+    """Positive means earlier/better than goal; negative means later."""
+    if activity == Activity.BED and goal_time == datetime.time(0, 0) and actual_time.hour == 23:
+        return min(actual_time.minute, 60 - actual_time.minute)
+
+    delta = minutes_since_midnight(goal_time) - minutes_since_midnight(actual_time)
+    half_day = 12 * 60
+    full_day = 24 * 60
+    if delta > half_day:
+        delta -= full_day
+    elif delta <= -half_day:
+        delta += full_day
+    return delta
+
+
+def records_by_report_week(
+    user_id: int,
+    activity: Activity,
+) -> dict[datetime.date, list[tuple[datetime.date, datetime.time]]]:
+    records_by_week: dict[datetime.date, list[tuple[datetime.date, datetime.time]]] = {}
     for record in tracking_service.history(user_id, days=36500, activity=activity):
-        day = activity_day(record.activity, record.timestamp)
-        records.append(
-            (
-                day,
-                1,
-                record.timestamp.time(),
-                format_report_line(day, "", record.timestamp.time()),
+        day = report_day(record.activity, record.timestamp)
+        week_start = monday_of_week_containing(day)
+        records_by_week.setdefault(week_start, []).append((day, record.timestamp.time()))
+    return records_by_week
+
+
+def format_activity_week_report(
+    activity: Activity,
+    week_start: datetime.date,
+    goal_time: datetime.time | None,
+    records: list[tuple[datetime.date, datetime.time]],
+) -> str:
+    lines: list[str] = []
+    if goal_time is None:
+        lines.append(f"{week_start.strftime('%d.%m.%Y')} goal: (not set)")
+    else:
+        lines.append(format_report_line(week_start, " goal", goal_time))
+
+    total = 0
+    has_delta = False
+    for day, time_value in sorted(records, key=lambda item: (item[0], item[1])):
+        day_label = day.strftime("%a")
+        if goal_time is None:
+            lines.append(f"{day_label:<3}  {time_value.strftime('%H:%M')}")
+            continue
+
+        delta = goal_delta_minutes(activity, goal_time, time_value)
+        total += delta
+        has_delta = True
+        lines.append(f"{day_label:<3}  {time_value.strftime('%H:%M')}  {format_signed_minutes(delta):>5}")
+
+    lines.append("---")
+    if has_delta:
+        lines.append(f"Total       {format_signed_minutes(total):>5}")
+    return "\n".join(lines)
+
+
+def format_activity_report(user_id: int, activity: Activity) -> str:
+    goals_by_week = dict(tracking_service.get_goals(activity, limit=None))
+    records_by_week = records_by_report_week(user_id, activity)
+    week_starts = sorted(set(goals_by_week) | set(records_by_week))
+    if not week_starts:
+        return f"No report data for {activity_name(activity)} yet."
+
+    lines: list[str] = []
+    for week_start in week_starts:
+        if lines:
+            lines.append("")
+        lines.append(
+            format_activity_week_report(
+                activity,
+                week_start,
+                goals_by_week.get(week_start),
+                records_by_week.get(week_start, []),
             )
         )
-    items = goals + records
-    if not items:
-        return f"No report data for {activity_name(activity)} yet."
-    items.sort(key=lambda item: (item[0], item[1], item[2]))
-    return "\n".join(line for _, _, _, line in items)
+    return "\n".join(lines)
+
+
+def format_current_week_report(user_id: int) -> str:
+    week_start = monday_of_week_containing(current_utc_datetime().date())
+    lines: list[str] = []
+    for activity in (Activity.HOME, Activity.BED):
+        if lines:
+            lines.append("")
+        try:
+            goal_time = tracking_service.get_goal(activity, week_start=week_start)
+        except KeyError:
+            goal_time = None
+        lines.append(activity_name(activity))
+        lines.append(
+            format_activity_week_report(
+                activity,
+                week_start,
+                goal_time,
+                records_by_report_week(user_id, activity).get(week_start, []),
+            )
+        )
+    return "\n".join(lines)
+
+
+def monospace_message(text: str) -> str:
+    return f"<pre>{html.escape(text)}</pre>"
 
 
 async def cmd_setgoal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -509,6 +594,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     text: str
     reply_markup = main_menu_keyboard()
+    parse_mode: str | None = None
 
     if query.data == "menu:main":
         clear_pending_action(context)
@@ -525,15 +611,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         reply_markup = past_menu_keyboard()
     elif query.data == "menu:goals":
         clear_pending_action(context)
-        week_header = format_goal_week_label(monday_of_week_containing(current_utc_datetime().date()))
-        text = (
-            f"{GOALS_ICON} This week ({week_header})\n\n"
-            f"{format_current_week_goals_lines()}\n\n"
-            "Choose a goal flow.\n\n"
-            f"• Current expects HH:MM for this week\n"
-            f"• Past expects a Monday date in `dd.mm.yyyy` or `dd.mm`, then HH:MM\n\n"
-            "Tap Cancel or send /start to return to the main menu."
-        )
+        text = monospace_message(format_current_week_report(user_id))
+        parse_mode = "HTML"
         reply_markup = goals_menu_keyboard()
     elif query.data.startswith("record_now:"):
         clear_pending_action(context)
@@ -593,14 +672,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if activity is None:
             text = "Unknown activity."
         else:
-            text = format_activity_report(user_id, activity)
+            text = monospace_message(format_activity_report(user_id, activity))
+            parse_mode = "HTML"
         reply_markup = goals_menu_keyboard()
     else:
         logger.warning("PROCESS callback ignored unknown data=%r", query.data)
         return
 
     try:
-        await query.edit_message_text(text=text, reply_markup=reply_markup)
+        await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode=parse_mode)
     except BadRequest as e:
         if "Message is not modified" in str(e):
             logger.info("PROCESS callback ignored: message not modified (data=%r user_id=%s)", query.data, user_id)

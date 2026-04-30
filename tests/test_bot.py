@@ -2,6 +2,7 @@ import datetime
 import sys
 import types
 import unittest
+from unittest.mock import patch
 
 dotenv_module = types.ModuleType("dotenv")
 dotenv_module.load_dotenv = lambda: None
@@ -70,7 +71,7 @@ class BotHelpersTest(unittest.TestCase):
     def tearDown(self) -> None:
         bot.tracking_service = self.original_tracking_service
 
-    def test_format_activity_report_merges_goals_and_records_sorted_by_date(self) -> None:
+    def test_format_activity_report_groups_records_by_goal_week_with_deltas(self) -> None:
         user_id = 123
         bot.tracking_service.set_goal(Activity.HOME, datetime.time(18, 0), datetime.date(2026, 4, 6))
         bot.tracking_service.set_goal(Activity.HOME, datetime.time(18, 30), datetime.date(2026, 4, 13))
@@ -82,7 +83,7 @@ class BotHelpersTest(unittest.TestCase):
         bot.tracking_service.record(
             user_id,
             Activity.HOME,
-            datetime.datetime(2026, 4, 7, 8, 45, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 7, 18, 45, tzinfo=datetime.timezone.utc),
         )
         bot.tracking_service.record(
             user_id,
@@ -97,10 +98,15 @@ class BotHelpersTest(unittest.TestCase):
             "\n".join(
                 [
                     "06.04.2026 goal: 18:00",
-                    "06.04.2026: 19:15",
-                    "07.04.2026: 08:45",
+                    "Mon  19:15    -75",
+                    "Tue  18:45    -45",
+                    "---",
+                    "Total        -120",
+                    "",
                     "13.04.2026 goal: 18:30",
-                    "13.04.2026: 20:00",
+                    "Mon  20:00    -90",
+                    "---",
+                    "Total         -90",
                 ]
             ),
         )
@@ -115,7 +121,137 @@ class BotHelpersTest(unittest.TestCase):
 
         report = bot.format_activity_report(user_id, Activity.BED)
 
-        self.assertEqual(report, "06.04.2026: 00:15")
+        self.assertEqual(
+            report,
+            "\n".join(
+                [
+                    "06.04.2026 goal: (not set)",
+                    "Mon  00:15",
+                    "---",
+                ]
+            ),
+        )
+
+    def test_bed_report_matches_midnight_goal_format(self) -> None:
+        user_id = 123
+        bot.tracking_service.set_goal(Activity.BED, datetime.time(0, 0), datetime.date(2026, 3, 30))
+        for timestamp in (
+            datetime.datetime(2026, 3, 31, 0, 0, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 1, 0, 4, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 2, 0, 5, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 3, 0, 3, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 4, 23, 15, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 5, 23, 32, tzinfo=datetime.timezone.utc),
+        ):
+            bot.tracking_service.record(user_id, Activity.BED, timestamp)
+
+        report = bot.format_activity_report(user_id, Activity.BED)
+
+        self.assertEqual(
+            report,
+            "\n".join(
+                [
+                    "30.03.2026 goal: 00:00",
+                    "Mon  00:00      0",
+                    "Tue  00:04     -4",
+                    "Wed  00:05     -5",
+                    "Thu  00:03     -3",
+                    "Sat  23:15    +15",
+                    "Sun  23:32    +28",
+                    "---",
+                    "Total         +31",
+                ]
+            ),
+        )
+
+    def test_goal_delta_minutes_handles_midnight_wraparound(self) -> None:
+        goal = datetime.time(0, 0)
+
+        self.assertEqual(bot.goal_delta_minutes(Activity.BED, goal, datetime.time(0, 4)), -4)
+        self.assertEqual(bot.goal_delta_minutes(Activity.BED, goal, datetime.time(23, 32)), 28)
+
+    def test_bed_report_keeps_before_midnight_records_on_their_day(self) -> None:
+        user_id = 123
+        bot.tracking_service.set_goal(Activity.BED, datetime.time(23, 55), datetime.date(2026, 4, 6))
+        for timestamp in (
+            datetime.datetime(2026, 4, 7, 0, 10, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 7, 23, 50, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 8, 23, 45, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 11, 0, 5, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 12, 0, 15, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 12, 23, 25, tzinfo=datetime.timezone.utc),
+        ):
+            bot.tracking_service.record(user_id, Activity.BED, timestamp)
+
+        report = bot.format_activity_report(user_id, Activity.BED)
+
+        self.assertEqual(
+            report,
+            "\n".join(
+                [
+                    "06.04.2026 goal: 23:55",
+                    "Mon  00:10    -15",
+                    "Tue  23:50     +5",
+                    "Wed  23:45    +10",
+                    "Fri  00:05    -10",
+                    "Sat  00:15    -20",
+                    "Sun  23:25    +30",
+                    "---",
+                    "Total           0",
+                ]
+            ),
+        )
+
+    @patch("bot.current_utc_datetime")
+    def test_format_current_week_report_only_shows_current_week(self, mock_now: object) -> None:
+        mock_now.return_value = datetime.datetime(2026, 4, 30, 9, 0, tzinfo=datetime.timezone.utc)
+        user_id = 123
+        bot.tracking_service.set_goal(Activity.HOME, datetime.time(20, 10), datetime.date(2026, 4, 20))
+        bot.tracking_service.set_goal(Activity.HOME, datetime.time(20, 20), datetime.date(2026, 4, 27))
+        bot.tracking_service.set_goal(Activity.BED, datetime.time(0, 0), datetime.date(2026, 4, 27))
+        bot.tracking_service.record(
+            user_id,
+            Activity.HOME,
+            datetime.datetime(2026, 4, 22, 20, 0, tzinfo=datetime.timezone.utc),
+        )
+        bot.tracking_service.record(
+            user_id,
+            Activity.HOME,
+            datetime.datetime(2026, 4, 29, 20, 5, tzinfo=datetime.timezone.utc),
+        )
+        bot.tracking_service.record(
+            user_id,
+            Activity.BED,
+            datetime.datetime(2026, 4, 27, 23, 50, tzinfo=datetime.timezone.utc),
+        )
+        bot.tracking_service.record(
+            user_id,
+            Activity.BED,
+            datetime.datetime(2026, 4, 30, 0, 15, tzinfo=datetime.timezone.utc),
+        )
+
+        report = bot.format_current_week_report(user_id)
+
+        self.assertEqual(
+            report,
+            "\n".join(
+                [
+                    "Home",
+                    "27.04.2026 goal: 20:20",
+                    "Wed  20:05    +15",
+                    "---",
+                    "Total         +15",
+                    "",
+                    "Bed",
+                    "27.04.2026 goal: 00:00",
+                    "Mon  23:50    +10",
+                    "Wed  00:15    -15",
+                    "---",
+                    "Total          -5",
+                ]
+            ),
+        )
+        self.assertNotIn("20.04.2026", report)
 
     def test_pending_reply_markup_contains_cancel_button(self) -> None:
         markup = bot.pending_reply_markup("goal_current")
