@@ -123,6 +123,20 @@ class BotHelpersTest(unittest.TestCase):
         self.assertEqual(markup.inline_keyboard[0][0].text, "Cancel")
         self.assertEqual(markup.inline_keyboard[0][0].callback_data, "menu:main")
 
+    def test_past_menu_contains_cancel_button(self) -> None:
+        markup = bot.past_menu_keyboard()
+
+        cancel_button = markup.inline_keyboard[-1][0]
+        self.assertEqual(cancel_button.text, "Cancel")
+        self.assertEqual(cancel_button.callback_data, "menu:main")
+
+    def test_goals_menu_contains_cancel_button(self) -> None:
+        markup = bot.goals_menu_keyboard()
+
+        cancel_button = markup.inline_keyboard[-1][0]
+        self.assertEqual(cancel_button.text, "Cancel")
+        self.assertEqual(cancel_button.callback_data, "menu:main")
+
 
 if __name__ == "__main__":
     unittest.main()

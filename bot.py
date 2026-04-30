@@ -67,6 +67,7 @@ def past_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(f"{HOME_ICON} {CALENDAR_ICON} Date", callback_data="past_date:home"),
                 InlineKeyboardButton(f"{BED_ICON} {CALENDAR_ICON} Date", callback_data="past_date:bed"),
             ],
+            [InlineKeyboardButton("Cancel", callback_data="menu:main")],
         ]
     )
 
@@ -86,6 +87,7 @@ def goals_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(f"{HOME_ICON} Report", callback_data="goal_report:home"),
                 InlineKeyboardButton(f"{BED_ICON} Report", callback_data="goal_report:bed"),
             ],
+            [InlineKeyboardButton("Cancel", callback_data="menu:main")],
         ]
     )
 
@@ -518,7 +520,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             "Choose a past event flow.\n\n"
             f"• {HOME_ICON} Yesterday / {BED_ICON} Yesterday expects HH:MM\n"
             f"• {CALENDAR_ICON} Date expects `dd.mm.yyyy HH:MM` or `dd.mm HH:MM`\n\n"
-            "Send /start to return to the main menu."
+            "Tap Cancel or send /start to return to the main menu."
         )
         reply_markup = past_menu_keyboard()
     elif query.data == "menu:goals":
@@ -530,7 +532,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             "Choose a goal flow.\n\n"
             f"• Current expects HH:MM for this week\n"
             f"• Past expects a Monday date in `dd.mm.yyyy` or `dd.mm`, then HH:MM\n\n"
-            "Send /start to return to the main menu."
+            "Tap Cancel or send /start to return to the main menu."
         )
         reply_markup = goals_menu_keyboard()
     elif query.data.startswith("record_now:"):
