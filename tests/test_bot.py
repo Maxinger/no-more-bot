@@ -105,6 +105,18 @@ class BotHelpersTest(unittest.TestCase):
             ),
         )
 
+    def test_format_activity_report_uses_previous_day_for_after_midnight_bed(self) -> None:
+        user_id = 123
+        bot.tracking_service.record(
+            user_id,
+            Activity.BED,
+            datetime.datetime(2026, 4, 7, 0, 15, tzinfo=datetime.timezone.utc),
+        )
+
+        report = bot.format_activity_report(user_id, Activity.BED)
+
+        self.assertEqual(report, "06.04.2026: 00:15")
+
     def test_pending_reply_markup_contains_cancel_button(self) -> None:
         markup = bot.pending_reply_markup("goal_current")
 

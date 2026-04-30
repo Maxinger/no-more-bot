@@ -17,11 +17,13 @@ from telegram.ext import (
 )
 
 from application.tracking_service import TrackingService, monday_of_week_containing
-from domain.model.record import Activity
+from domain.model.record import Activity, activity_day, timestamp_for_activity_day
+from infra.dev.initial_data_json_loader import apply_initial_data_fixture
 from infra.tracker.in_memory import InMemoryTracker
 
 logger = logging.getLogger(__name__)
 tracking_service = TrackingService(InMemoryTracker())
+apply_initial_data_fixture(tracking_service)
 
 USER_DATA_PENDING_ACTION = "pending_action"
 HOME_ICON = "🏠"
@@ -176,8 +178,16 @@ def pending_reply_markup(kind: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("Cancel", callback_data="menu:main")]])
 
 
-def build_timestamp(day: datetime.date, time_value: datetime.time) -> datetime.datetime:
-    return datetime.datetime.combine(day, time_value).replace(tzinfo=datetime.timezone.utc)
+def build_activity_timestamp(
+    activity: Activity,
+    day: datetime.date,
+    time_value: datetime.time,
+) -> datetime.datetime:
+    return timestamp_for_activity_day(activity, day, time_value)
+
+
+def format_saved_event(activity: Activity, timestamp: datetime.datetime) -> str:
+    return f"{activity_day(activity, timestamp).strftime('%Y-%m-%d')} {timestamp.strftime('%H:%M')}"
 
 
 def current_goal_summary(activity: Activity) -> str:
@@ -211,15 +221,17 @@ def format_activity_report(user_id: int, activity: Activity) -> str:
         (week_start, 0, goal_time, format_report_line(week_start, " goal", goal_time))
         for week_start, goal_time in tracking_service.get_goals(activity, limit=None)
     ]
-    records = [
-        (
-            record.timestamp.date(),
-            1,
-            record.timestamp.time(),
-            format_report_line(record.timestamp.date(), "", record.timestamp.time()),
+    records = []
+    for record in tracking_service.history(user_id, days=36500, activity=activity):
+        day = activity_day(record.activity, record.timestamp)
+        records.append(
+            (
+                day,
+                1,
+                record.timestamp.time(),
+                format_report_line(day, "", record.timestamp.time()),
+            )
         )
-        for record in tracking_service.history(user_id, days=36500, activity=activity)
-    ]
     items = goals + records
     if not items:
         return f"No report data for {activity_name(activity)} yet."
@@ -387,11 +399,11 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
             )
             return
         day = current_utc_datetime().date() - datetime.timedelta(days=1)
-        record = tracking_service.record(user_id, activity, build_timestamp(day, time_value))
+        record = tracking_service.record(user_id, activity, build_activity_timestamp(activity, day, time_value))
         clear_pending_action(context)
         await update.message.reply_text(
             f"{activity_icon(activity)} Saved {activity_name(activity)} for "
-            f"{record.timestamp.strftime('%Y-%m-%d %H:%M')}.",
+            f"{format_saved_event(activity, record.timestamp)}.",
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -404,11 +416,15 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
                 reply_markup=pending_reply_markup(kind),
             )
             return
-        record = tracking_service.record(user_id, activity, timestamp)
+        record = tracking_service.record(
+            user_id,
+            activity,
+            build_activity_timestamp(activity, timestamp.date(), timestamp.time()),
+        )
         clear_pending_action(context)
         await update.message.reply_text(
             f"{activity_icon(activity)} Saved {activity_name(activity)} for "
-            f"{record.timestamp.strftime('%Y-%m-%d %H:%M')}.",
+            f"{format_saved_event(activity, record.timestamp)}.",
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -525,7 +541,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             text = "Unknown activity."
         else:
             record = tracking_service.record(user_id, activity, current_utc_datetime())
-            text = f"{activity_icon(activity)} Recorded {activity_name(activity)} at {record.timestamp.strftime('%Y-%m-%d %H:%M')}."
+            text = f"{activity_icon(activity)} Recorded {activity_name(activity)} for {format_saved_event(activity, record.timestamp)}."
     elif query.data.startswith("past_yesterday:"):
         token = query.data.split(":", 1)[1]
         activity = parse_activity_token(token)
