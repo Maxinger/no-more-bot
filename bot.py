@@ -28,12 +28,13 @@ HOME_ICON = "🏠"
 BED_ICON = "🛏️"
 TIME_ICON = "⏰"
 CALENDAR_ICON = "📅"
+GOALS_ICON = "🎯"
 
 WELCOME = (
     "NoMoreBot — track activities and weekly goals.\n\n"
     f"{HOME_ICON} Now and {BED_ICON} Now record an event immediately.\n"
     f"{TIME_ICON} Past lets you save yesterday or a specific date.\n"
-    "Goals lets you set weekly goals.\n\n"
+    f"{GOALS_ICON} Goals lets you set weekly goals.\n\n"
     "Send /start anytime to return to the main menu."
 )
 
@@ -47,7 +48,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(f"{TIME_ICON} Past", callback_data="menu:past"),
-                InlineKeyboardButton("Goals", callback_data="menu:goals"),
+                InlineKeyboardButton(f"{GOALS_ICON} Goals", callback_data="menu:goals"),
             ],
         ]
     )
@@ -186,6 +187,19 @@ def current_goal_summary(activity: Activity) -> str:
     except KeyError:
         return f"No current goal for {activity_name(activity)} ({format_goal_week_label(week)})."
     return f"Current goal for {activity_name(activity)}: {goal.strftime('%H:%M')} ({format_goal_week_label(week)})."
+
+
+def format_current_week_goals_lines() -> str:
+    """Home and Bed goal times for the current UTC week, or '(not set)'."""
+    week = monday_of_week_containing(current_utc_datetime().date())
+    lines: list[str] = []
+    for activity in (Activity.HOME, Activity.BED):
+        try:
+            goal = tracking_service.get_goal(activity, week_start=week)
+            lines.append(f"{activity_icon(activity)} {activity_name(activity)}: {goal.strftime('%H:%M')}")
+        except KeyError:
+            lines.append(f"{activity_icon(activity)} {activity_name(activity)}: (not set)")
+    return "\n".join(lines)
 
 
 def format_report_line(day: datetime.date, label: str, time_value: datetime.time) -> str:
@@ -493,7 +507,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         reply_markup = past_menu_keyboard()
     elif query.data == "menu:goals":
         clear_pending_action(context)
+        week_header = format_goal_week_label(monday_of_week_containing(current_utc_datetime().date()))
         text = (
+            f"{GOALS_ICON} This week ({week_header})\n\n"
+            f"{format_current_week_goals_lines()}\n\n"
             "Choose a goal flow.\n\n"
             f"• Current expects HH:MM for this week\n"
             f"• Past expects a Monday date in `dd.mm.yyyy` or `dd.mm`, then HH:MM\n\n"
