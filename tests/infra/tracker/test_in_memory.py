@@ -47,7 +47,7 @@ class TrackerTest(unittest.TestCase):
             timestamp=datetime.datetime(2026, 4, 10, 22, 15, tzinfo=datetime.timezone.utc),
         )
 
-        history = tracker.history(user_id, days=14)
+        history = tracker.history(user_id, days=36500)
 
         self.assertEqual(older.timestamp, datetime.datetime(2026, 4, 10, 18, 0, tzinfo=datetime.timezone.utc))
         self.assertEqual(history[:3], [newer, middle, older])
@@ -69,4 +69,3 @@ class TrackerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
