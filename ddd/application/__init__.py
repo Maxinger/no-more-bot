@@ -4,6 +4,9 @@ from ddd.application.use_cases import (
     RecordActivityNowCommand,
     RecordActivityResult,
     RecordActivityUseCase,
+    SetWeekGoalCommand,
+    SetWeekGoalResult,
+    SetWeekGoalUseCase,
 )
 
 __all__ = [
@@ -11,6 +14,9 @@ __all__ = [
     "RecordActivityNowCommand",
     "RecordActivityResult",
     "RecordActivityUseCase",
+    "SetWeekGoalCommand",
+    "SetWeekGoalResult",
+    "SetWeekGoalUseCase",
     "UseCase",
     "handles",
 ]

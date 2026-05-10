@@ -3,11 +3,14 @@ from ddd.application import (
     RecordActivityNowCommand,
     RecordActivityResult,
     RecordActivityUseCase,
+    SetWeekGoalCommand,
+    SetWeekGoalResult,
+    SetWeekGoalUseCase,
     UseCase,
     handles,
 )
-from ddd.domain import DAY_START, Activity, Record, RecordTime, WeekStart
-from ddd.domain.ports import RecordRepository
+from ddd.domain import DAY_START, Activity, Record, RecordTime, WeekGoal, WeekStart
+from ddd.domain.ports import RecordRepository, WeekGoalRepository
 
 __all__ = [
     "Activity",
@@ -19,7 +22,12 @@ __all__ = [
     "RecordActivityUseCase",
     "RecordRepository",
     "RecordTime",
+    "SetWeekGoalCommand",
+    "SetWeekGoalResult",
+    "SetWeekGoalUseCase",
     "UseCase",
+    "WeekGoal",
+    "WeekGoalRepository",
     "WeekStart",
     "handles",
 ]
