@@ -1,6 +1,7 @@
 from ddd.application import (
     RecordActivityForDayCommand,
     RecordActivityNowCommand,
+    RecordActivityResult,
     RecordActivityUseCase,
     UseCase,
     handles,
@@ -14,6 +15,7 @@ __all__ = [
     "Record",
     "RecordActivityForDayCommand",
     "RecordActivityNowCommand",
+    "RecordActivityResult",
     "RecordActivityUseCase",
     "RecordRepository",
     "RecordTime",
