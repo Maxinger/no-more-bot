@@ -7,7 +7,7 @@ from ddd.application import (
     RecordActivityResult,
     RecordActivityUseCase,
 )
-from ddd.domain import Activity, Record, RecordTime
+from ddd.domain import Activity, Record, RecordTime, WeekStart
 
 
 class FakeRecordRepository:
@@ -16,6 +16,21 @@ class FakeRecordRepository:
 
     def find(self, user_id: int, activity: Activity, date: datetime.date) -> Record | None:
         return self._by_key.get((user_id, activity, date))
+
+    def find_for_week(
+        self, user_id: int, activity: Activity, week: WeekStart
+    ) -> tuple[Record, ...]:
+        start = week.value
+        end = start + datetime.timedelta(days=6)
+        return tuple(
+            record
+            for (record_user_id, record_activity, record_date), record in sorted(
+                self._by_key.items(), key=lambda item: item[0][2]
+            )
+            if record_user_id == user_id
+            and record_activity == activity
+            and start <= record_date <= end
+        )
 
     def save(self, record: Record) -> None:
         self._by_key[(record.user_id, record.activity, record.time.date)] = record

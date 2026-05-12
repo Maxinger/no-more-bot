@@ -1,4 +1,7 @@
 from ddd.application import (
+    LoadWeekProgressCommand,
+    LoadWeekProgressResult,
+    LoadWeekProgressUseCase,
     RecordActivityForDayCommand,
     RecordActivityNowCommand,
     RecordActivityResult,
@@ -24,6 +27,9 @@ from ddd.domain.ports import RecordRepository, WeekGoalRepository
 __all__ = [
     "Activity",
     "DAY_START",
+    "LoadWeekProgressCommand",
+    "LoadWeekProgressResult",
+    "LoadWeekProgressUseCase",
     "Record",
     "RecordActivityForDayCommand",
     "RecordActivityNowCommand",

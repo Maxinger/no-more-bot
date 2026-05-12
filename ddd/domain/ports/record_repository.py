@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Protocol
 
-from ddd.domain.record import Activity, Record
+from ddd.domain.record import Activity, Record, WeekStart
 
 
 class RecordRepository(Protocol):
@@ -14,6 +14,12 @@ class RecordRepository(Protocol):
 
         ``date`` is the logical calendar day (``record.time.date`` after cutoff rules).
         """
+        raise NotImplementedError
+
+    def find_for_week(
+        self, user_id: int, activity: Activity, week: WeekStart
+    ) -> tuple[Record, ...]:
+        """Return records whose logical days fall within ``week`` Monday through Sunday."""
         raise NotImplementedError
 
     def save(self, record: Record) -> None:

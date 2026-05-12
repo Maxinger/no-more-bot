@@ -1,5 +1,8 @@
 from ddd.application.use_case import UseCase, handles
 from ddd.application.use_cases import (
+    LoadWeekProgressCommand,
+    LoadWeekProgressResult,
+    LoadWeekProgressUseCase,
     RecordActivityForDayCommand,
     RecordActivityNowCommand,
     RecordActivityResult,
@@ -10,6 +13,9 @@ from ddd.application.use_cases import (
 )
 
 __all__ = [
+    "LoadWeekProgressCommand",
+    "LoadWeekProgressResult",
+    "LoadWeekProgressUseCase",
     "RecordActivityForDayCommand",
     "RecordActivityNowCommand",
     "RecordActivityResult",
