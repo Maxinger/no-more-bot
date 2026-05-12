@@ -54,10 +54,13 @@ class DddRecordTest(unittest.TestCase):
             datetime.datetime(2026, 5, 9, 0, 15, tzinfo=datetime.timezone.utc)
         )
 
-        self.assertEqual(
-            record_time,
-            RecordTime(datetime.date(2026, 5, 8), datetime.time(0, 15)),
-        )
+    def test_reward_for_goal_truncates_seconds_toward_zero(self) -> None:
+        rt = RecordTime(datetime.date(2026, 5, 6), datetime.time(22, 0))
+        self.assertEqual(rt.reward_for_goal(datetime.time(23, 0)), 60)
+
+    def test_reward_for_goal_uses_logical_day_boundary_like_to_datetime(self) -> None:
+        rt = RecordTime(datetime.date(2026, 5, 8), datetime.time(0, 15))
+        self.assertEqual(rt.reward_for_goal(datetime.time(0, 30)), 15)
 
     def test_week_start_keeps_monday(self) -> None:
         week_start = WeekStart(datetime.date(2026, 5, 4))

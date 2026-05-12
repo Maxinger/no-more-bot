@@ -49,6 +49,13 @@ class RecordTime:
 
         return datetime.combine(actual_date, self.time, tzinfo=timezone.utc)
 
+    def reward_for_goal(self, target_time: time) -> int:
+        """Minutes from ``to_datetime()`` to the goal instant for ``target_time`` (truncated)."""
+        actual = self.to_datetime()
+        target_instant = RecordTime(self.date, target_time).to_datetime()
+        delta = target_instant - actual
+        return int(delta.total_seconds() / 60)
+
 
 @dataclass(frozen=True)
 class Record:

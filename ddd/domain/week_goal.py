@@ -1,4 +1,4 @@
-"""Week goal aggregate for the DDD learning path."""
+"""Weekly goal value: user activity target for a concrete week."""
 
 from __future__ import annotations
 
