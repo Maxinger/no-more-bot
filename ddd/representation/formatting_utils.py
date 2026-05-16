@@ -12,7 +12,9 @@ def format_time(value: time) -> str:
     return value.strftime("%H:%M")
 
 def format_reward(minutes: int) -> str:
-    """Format signed minute reward total (+ earlier than goal, - later)."""
+    """Format minute reward total (+ earlier than goal, - later) with status emoji."""
     if minutes == 0:
-        return "=0"
-    return f"{minutes:+d}"
+        return "⚪ 0"
+    if minutes > 0:
+        return f"🟢 +{minutes}"
+    return f"🔴 {minutes}"

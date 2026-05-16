@@ -48,6 +48,7 @@ class CurrentWeekSummaryText:
                     date=current_date,
                 )
             ).progress
+            lines.append("")
             lines.append(self._format_activity(activity, progress))
 
         return "\n".join(lines)
@@ -60,4 +61,8 @@ class CurrentWeekSummaryText:
         if progress is None:
             return f"{label} not set"
         else:
-            return f"{label} {format_time(progress.goal.target_time)} {format_reward(progress.reward())} / {len(progress.records)}"
+            n = len(progress.records)
+            return (
+                f"{label} {format_time(progress.goal.target_time)} "
+                f"{format_reward(progress.reward())} ({n})"
+            )
