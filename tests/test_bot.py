@@ -274,5 +274,47 @@ class BotHelpersTest(unittest.TestCase):
         self.assertEqual(cancel_button.callback_data, "menu:main")
 
 
+class FakeMessage:
+    def __init__(self) -> None:
+        self.replies = []
+
+    async def reply_text(self, text, reply_markup=None, parse_mode=None):
+        self.replies.append(
+            {
+                "text": text,
+                "reply_markup": reply_markup,
+                "parse_mode": parse_mode,
+            }
+        )
+
+
+class FakeCurrentWeekSummaryText:
+    def summary_for_current_week(self, user_id: int) -> str:
+        return f"Current week summary for {user_id}"
+
+
+class StartHandlerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_start_replies_with_current_week_summary(self) -> None:
+        original_summary_text = bot.current_week_summary_text
+        bot.current_week_summary_text = FakeCurrentWeekSummaryText()
+        message = FakeMessage()
+        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "goal_current"}})
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123, username="maxi"),
+            effective_chat=types.SimpleNamespace(id=456),
+            message=message,
+        )
+
+        try:
+            await bot.start(update, context)
+        finally:
+            bot.current_week_summary_text = original_summary_text
+
+        self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
+        self.assertEqual(len(message.replies), 1)
+        self.assertEqual(message.replies[0]["text"], "Current week summary for 123")
+        self.assertIsNotNone(message.replies[0]["reply_markup"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -18,13 +18,22 @@ from telegram.ext import (
 )
 
 from application.tracking_service import TrackingService, monday_of_week_containing
+from ddd.application import LoadWeekProgressUseCase
+from ddd.infra import InMemoryRepositories
+from ddd.infra.dev import apply_initial_data_fixture as apply_ddd_initial_data_fixture
+from ddd.representation import CurrentWeekSummaryText
 from domain.model.record import Activity, activity_day, timestamp_for_activity_day
-from infra.dev.initial_data_json_loader import apply_initial_data_fixture
+from infra.dev.initial_data_json_loader import apply_initial_data_fixture as apply_legacy_initial_data_fixture
 from infra.tracker.in_memory import InMemoryTracker
 
 logger = logging.getLogger(__name__)
 tracking_service = TrackingService(InMemoryTracker())
-apply_initial_data_fixture(tracking_service)
+apply_legacy_initial_data_fixture(tracking_service)
+ddd_repositories = InMemoryRepositories()
+apply_ddd_initial_data_fixture(ddd_repositories)
+current_week_summary_text = CurrentWeekSummaryText(
+    LoadWeekProgressUseCase(ddd_repositories.goals, ddd_repositories.records)
+)
 
 USER_DATA_PENDING_ACTION = "pending_action"
 HOME_ICON = "🏠"
@@ -422,8 +431,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         update.effective_chat.id if update.effective_chat else None,
     )
     if update.message:
-        await update.message.reply_text(WELCOME, reply_markup=main_menu_keyboard())
-    logger.debug("PROCESS /start done: sent welcome + keyboard")
+        text = (
+            current_week_summary_text.summary_for_current_week(user.id)
+            if user is not None
+            else "Current week is not available."
+        )
+        await update.message.reply_text(text, reply_markup=main_menu_keyboard())
+    logger.debug("PROCESS /start done: sent current week summary + keyboard")
 
 
 async def log_incoming_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

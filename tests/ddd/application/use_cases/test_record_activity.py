@@ -8,41 +8,12 @@ from ddd.application import (
     RecordActivityUseCase,
 )
 from ddd.domain import Activity, Record, RecordTime, WeekStart
-
-
-class FakeRecordRepository:
-    def __init__(self) -> None:
-        self._by_key: dict[tuple[int, Activity, datetime.date], Record] = {}
-
-    def find(self, user_id: int, activity: Activity, date: datetime.date) -> Record | None:
-        return self._by_key.get((user_id, activity, date))
-
-    def find_for_week(
-        self, user_id: int, activity: Activity, week: WeekStart
-    ) -> tuple[Record, ...]:
-        start = week.value
-        end = start + datetime.timedelta(days=6)
-        return tuple(
-            record
-            for (record_user_id, record_activity, record_date), record in sorted(
-                self._by_key.items(), key=lambda item: item[0][2]
-            )
-            if record_user_id == user_id
-            and record_activity == activity
-            and start <= record_date <= end
-        )
-
-    def save(self, record: Record) -> None:
-        self._by_key[(record.user_id, record.activity, record.time.date)] = record
-
-    @property
-    def saved_records(self) -> list[Record]:
-        return list(self._by_key.values())
+from ddd.infra import InMemoryRecordRepository
 
 
 class RecordActivityUseCaseTest(unittest.TestCase):
     def test_record_activity_now_saves_record_from_timestamp(self) -> None:
-        repository = FakeRecordRepository()
+        repository = InMemoryRecordRepository()
         use_case = RecordActivityUseCase(repository)
 
         expected_record = Record(
@@ -62,10 +33,13 @@ class RecordActivityUseCaseTest(unittest.TestCase):
             result,
             RecordActivityResult(record=expected_record, replaced_existing=False),
         )
-        self.assertEqual(repository.saved_records, [expected_record])
+        self.assertEqual(
+            repository.find(123, Activity.HOME, datetime.date(2026, 5, 8)),
+            expected_record,
+        )
 
     def test_record_activity_now_uses_logical_day_for_early_time(self) -> None:
-        repository = FakeRecordRepository()
+        repository = InMemoryRecordRepository()
         use_case = RecordActivityUseCase(repository)
 
         result = use_case.handle(
@@ -83,7 +57,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
         )
 
     def test_record_activity_for_day_saves_record_from_logical_date_and_time(self) -> None:
-        repository = FakeRecordRepository()
+        repository = InMemoryRecordRepository()
         use_case = RecordActivityUseCase(repository)
 
         expected_record = Record(
@@ -110,7 +84,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
         )
 
     def test_second_record_same_user_activity_and_logical_day_replaces_first(self) -> None:
-        repository = FakeRecordRepository()
+        repository = InMemoryRecordRepository()
         use_case = RecordActivityUseCase(repository)
 
         first = use_case.handle(
@@ -150,10 +124,17 @@ class RecordActivityUseCaseTest(unittest.TestCase):
             second,
             RecordActivityResult(record=second_expected, replaced_existing=True),
         )
-        self.assertEqual(repository.saved_records, [second_expected])
+        self.assertEqual(
+            repository.find_for_week(
+                123,
+                Activity.BED,
+                WeekStart(datetime.date(2026, 5, 4)),
+            ),
+            (second_expected,),
+        )
 
     def test_different_activities_same_logical_day_are_distinct(self) -> None:
-        repository = FakeRecordRepository()
+        repository = InMemoryRecordRepository()
         use_case = RecordActivityUseCase(repository)
 
         use_case.handle(
@@ -174,10 +155,11 @@ class RecordActivityUseCaseTest(unittest.TestCase):
         )
 
         self.assertFalse(bed.replaced_existing)
-        self.assertEqual(len(repository.saved_records), 2)
+        self.assertIsNotNone(repository.find(123, Activity.HOME, datetime.date(2026, 5, 8)))
+        self.assertIsNotNone(repository.find(123, Activity.BED, datetime.date(2026, 5, 8)))
 
     def test_records_on_different_logical_days_are_not_replacements(self) -> None:
-        repository = FakeRecordRepository()
+        repository = InMemoryRecordRepository()
         use_case = RecordActivityUseCase(repository)
 
         day1 = use_case.handle(
@@ -199,10 +181,11 @@ class RecordActivityUseCaseTest(unittest.TestCase):
 
         self.assertFalse(day1.replaced_existing)
         self.assertFalse(day2.replaced_existing)
-        self.assertEqual(len(repository.saved_records), 2)
+        self.assertIsNotNone(repository.find(123, Activity.HOME, datetime.date(2026, 5, 8)))
+        self.assertIsNotNone(repository.find(123, Activity.BED, datetime.date(2026, 5, 9)))
 
     def test_unsupported_command_is_rejected(self) -> None:
-        use_case = RecordActivityUseCase(FakeRecordRepository())
+        use_case = RecordActivityUseCase(InMemoryRecordRepository())
 
         with self.assertRaises(TypeError):
             use_case.handle(object())

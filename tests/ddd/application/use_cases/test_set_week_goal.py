@@ -3,26 +3,12 @@ import unittest
 
 from ddd.application import SetWeekGoalCommand, SetWeekGoalResult, SetWeekGoalUseCase
 from ddd.domain import Activity, WeekGoal, WeekStart
-
-
-class FakeWeekGoalRepository:
-    def __init__(self) -> None:
-        self._by_key: dict[tuple[int, Activity, datetime.date], WeekGoal] = {}
-
-    def find(self, user_id: int, activity: Activity, week: WeekStart) -> WeekGoal | None:
-        return self._by_key.get((user_id, activity, week.value))
-
-    def save(self, goal: WeekGoal) -> None:
-        self._by_key[(goal.user_id, goal.activity, goal.week.value)] = goal
-
-    @property
-    def saved_goals(self) -> list[WeekGoal]:
-        return list(self._by_key.values())
+from ddd.infra import InMemoryWeekGoalRepository
 
 
 class SetWeekGoalUseCaseTest(unittest.TestCase):
     def test_first_set_returns_replaced_false(self) -> None:
-        repository = FakeWeekGoalRepository()
+        repository = InMemoryWeekGoalRepository()
         use_case = SetWeekGoalUseCase(repository)
 
         monday = datetime.date(2026, 5, 4)
@@ -42,10 +28,10 @@ class SetWeekGoalUseCaseTest(unittest.TestCase):
         )
 
         self.assertEqual(result, SetWeekGoalResult(goal=expected, replaced_existing=False))
-        self.assertEqual(repository.saved_goals, [expected])
+        self.assertEqual(repository.find(123, Activity.HOME, WeekStart(monday)), expected)
 
     def test_second_set_same_triple_different_target_time_returns_replaced_true(self) -> None:
-        repository = FakeWeekGoalRepository()
+        repository = InMemoryWeekGoalRepository()
         use_case = SetWeekGoalUseCase(repository)
 
         monday = datetime.date(2026, 5, 4)
@@ -74,10 +60,10 @@ class SetWeekGoalUseCaseTest(unittest.TestCase):
 
         self.assertFalse(first.replaced_existing)
         self.assertEqual(second, SetWeekGoalResult(goal=second_expected, replaced_existing=True))
-        self.assertEqual(repository.saved_goals, [second_expected])
+        self.assertEqual(repository.find(123, Activity.BED, WeekStart(monday)), second_expected)
 
     def test_same_iso_week_wednesday_then_monday_second_replaces_same_row(self) -> None:
-        repository = FakeWeekGoalRepository()
+        repository = InMemoryWeekGoalRepository()
         use_case = SetWeekGoalUseCase(repository)
 
         wednesday = datetime.date(2026, 5, 6)
@@ -109,10 +95,10 @@ class SetWeekGoalUseCaseTest(unittest.TestCase):
         self.assertFalse(first.replaced_existing)
         self.assertEqual(first.goal.week, WeekStart(monday))
         self.assertEqual(second, SetWeekGoalResult(goal=second_expected, replaced_existing=True))
-        self.assertEqual(repository.saved_goals, [second_expected])
+        self.assertEqual(repository.find(123, Activity.HOME, WeekStart(monday)), second_expected)
 
     def test_unsupported_command_is_rejected(self) -> None:
-        use_case = SetWeekGoalUseCase(FakeWeekGoalRepository())
+        use_case = SetWeekGoalUseCase(InMemoryWeekGoalRepository())
 
         with self.assertRaises(TypeError):
             use_case.handle(object())

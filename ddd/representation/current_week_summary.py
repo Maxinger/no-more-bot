@@ -41,9 +41,6 @@ class CurrentWeekSummaryText:
 
         lines = [f"Current week ({format_date(week.value)})"]
         for activity in ACTIVITIES:
-            if len(lines) > 1:
-                lines.append("")
-
             progress = self._load_week_progress.handle(
                 LoadWeekProgressCommand(
                     user_id=user_id,
