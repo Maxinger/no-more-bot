@@ -59,6 +59,7 @@ sys.modules.setdefault("telegram.ext", telegram_ext_module)
 
 import bot
 from application.tracking_service import TrackingService
+from ddd.domain import Record, RecordTime
 from domain.model.record import Activity
 from infra.tracker.in_memory import InMemoryTracker
 
@@ -293,6 +294,30 @@ class FakeCurrentWeekSummaryText:
         return f"Current week summary for {user_id}"
 
 
+class FakeRecordActivity:
+    def __init__(self) -> None:
+        self.command = None
+
+    def handle(self, command):
+        self.command = command
+        return types.SimpleNamespace(
+            record=Record(
+                user_id=command.user_id,
+                activity=command.activity,
+                time=RecordTime(command.activity_date, command.activity_time),
+            )
+        )
+
+
+class FakeWeekDetailsText:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def details_for_week(self, user_id, activity, date):
+        self.calls.append((user_id, activity, date))
+        return f"Week details for {activity.value} on {date.isoformat()}"
+
+
 class StartHandlerTest(unittest.IsolatedAsyncioTestCase):
     async def test_start_replies_with_current_week_summary(self) -> None:
         original_summary_text = bot.current_week_summary_text
@@ -313,6 +338,94 @@ class StartHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertEqual(len(message.replies), 1)
         self.assertEqual(message.replies[0]["text"], "Current week summary for 123")
+        self.assertIsNotNone(message.replies[0]["reply_markup"])
+
+
+class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_yesterday_recording_replies_with_week_details_for_yesterday(self) -> None:
+        original_record_activity = bot.record_activity
+        original_week_details_text = bot.week_details_text
+        original_tracking_service = bot.tracking_service
+        fake_record_activity = FakeRecordActivity()
+        fake_week_details_text = FakeWeekDetailsText()
+        bot.record_activity = fake_record_activity
+        bot.week_details_text = fake_week_details_text
+        bot.tracking_service = TrackingService(InMemoryTracker())
+        message = FakeMessage()
+        context = types.SimpleNamespace(
+            user_data={
+                bot.USER_DATA_PENDING_ACTION: {
+                    "kind": "event_yesterday",
+                    "activity": Activity.HOME,
+                }
+            }
+        )
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            message=types.SimpleNamespace(text="20:01", reply_text=message.reply_text),
+        )
+
+        try:
+            with patch("bot.current_utc_datetime") as mock_now:
+                mock_now.return_value = datetime.datetime(
+                    2026, 5, 18, 9, 0, tzinfo=datetime.timezone.utc
+                )
+                await bot.maybe_handle_pending_input(update, context)
+        finally:
+            bot.record_activity = original_record_activity
+            bot.week_details_text = original_week_details_text
+            bot.tracking_service = original_tracking_service
+
+        self.assertIsInstance(fake_record_activity.command, bot.RecordActivityForDayCommand)
+        self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 17))
+        self.assertEqual(fake_record_activity.command.activity_time, datetime.time(20, 1))
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.HOME, datetime.date(2026, 5, 17))])
+        self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
+        self.assertEqual(
+            message.replies[0]["text"],
+            "Week details for going_home on 2026-05-17",
+        )
+        self.assertIsNotNone(message.replies[0]["reply_markup"])
+
+    async def test_past_date_recording_replies_with_week_details_for_entered_date(self) -> None:
+        original_record_activity = bot.record_activity
+        original_week_details_text = bot.week_details_text
+        original_tracking_service = bot.tracking_service
+        fake_record_activity = FakeRecordActivity()
+        fake_week_details_text = FakeWeekDetailsText()
+        bot.record_activity = fake_record_activity
+        bot.week_details_text = fake_week_details_text
+        bot.tracking_service = TrackingService(InMemoryTracker())
+        message = FakeMessage()
+        context = types.SimpleNamespace(
+            user_data={
+                bot.USER_DATA_PENDING_ACTION: {
+                    "kind": "event_date",
+                    "activity": Activity.BED,
+                }
+            }
+        )
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            message=types.SimpleNamespace(text="17.05.2026 00:15", reply_text=message.reply_text),
+        )
+
+        try:
+            await bot.maybe_handle_pending_input(update, context)
+        finally:
+            bot.record_activity = original_record_activity
+            bot.week_details_text = original_week_details_text
+            bot.tracking_service = original_tracking_service
+
+        self.assertIsInstance(fake_record_activity.command, bot.RecordActivityForDayCommand)
+        self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 17))
+        self.assertEqual(fake_record_activity.command.activity_time, datetime.time(0, 15))
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.BED, datetime.date(2026, 5, 17))])
+        self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
+        self.assertEqual(
+            message.replies[0]["text"],
+            "Week details for going_to_bed on 2026-05-17",
+        )
         self.assertIsNotNone(message.replies[0]["reply_markup"])
 
 

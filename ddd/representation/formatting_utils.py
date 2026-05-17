@@ -11,10 +11,17 @@ def format_time(value: time) -> str:
     """Format time in 24-hour format."""
     return value.strftime("%H:%M")
 
-def format_reward(minutes: int) -> str:
-    """Format minute reward total (+ earlier than goal, - later) with status emoji."""
+def format_reward(minutes: int, color_scheme: str = "🟢⚪🔴") -> str:
+    """Format minute reward with a status icon and always-signed value."""
+    if len(color_scheme) != 3:
+        raise ValueError("color_scheme must contain exactly three symbols.")
+
+    positive, zero, negative = color_scheme
     if minutes == 0:
-        return "⚪ 0"
-    if minutes > 0:
-        return f"🟢 +{minutes}"
-    return f"🔴 {minutes}"
+        icon = zero
+    elif minutes > 0:
+        icon = positive
+    else:
+        icon = negative
+
+    return f"{icon} {minutes:+d}"

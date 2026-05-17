@@ -63,7 +63,7 @@ class CurrentWeekSummaryTextTest(unittest.TestCase):
                     "",
                     "🏠 18:00 🔴 -5 (2)",
                     "",
-                    "🛏️ 22:30 ⚪ 0 (0)",
+                    "🛏️ 22:30 ⚪ +0 (0)",
                 ]
             ),
         )
@@ -91,7 +91,7 @@ class CurrentWeekSummaryTextTest(unittest.TestCase):
                 [
                     "Current week (04.05.2026)",
                     "",
-                    "🏠 18:00 ⚪ 0 (0)",
+                    "🏠 18:00 ⚪ +0 (0)",
                     "",
                     "🛏️ not set",
                 ]

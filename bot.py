@@ -18,10 +18,16 @@ from telegram.ext import (
 )
 
 from application.tracking_service import TrackingService, monday_of_week_containing
-from ddd.application import LoadWeekProgressUseCase
+from ddd.application import (
+    LoadWeekProgressUseCase,
+    RecordActivityForDayCommand,
+    RecordActivityNowCommand,
+    RecordActivityUseCase,
+)
+from ddd.domain.record import Activity as DddActivity
 from ddd.infra import InMemoryRepositories
 from ddd.infra.dev import apply_initial_data_fixture as apply_ddd_initial_data_fixture
-from ddd.representation import CurrentWeekSummaryText
+from ddd.representation import CurrentWeekSummaryText, WeekDetailsText
 from domain.model.record import Activity, activity_day, timestamp_for_activity_day
 from infra.dev.initial_data_json_loader import apply_initial_data_fixture as apply_legacy_initial_data_fixture
 from infra.tracker.in_memory import InMemoryTracker
@@ -34,6 +40,10 @@ apply_ddd_initial_data_fixture(ddd_repositories)
 current_week_summary_text = CurrentWeekSummaryText(
     LoadWeekProgressUseCase(ddd_repositories.goals, ddd_repositories.records)
 )
+week_details_text = WeekDetailsText(
+    LoadWeekProgressUseCase(ddd_repositories.goals, ddd_repositories.records)
+)
+record_activity = RecordActivityUseCase(ddd_repositories.records)
 
 USER_DATA_PENDING_ACTION = "pending_action"
 HOME_ICON = "🏠"
@@ -74,8 +84,8 @@ def past_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(f"{BED_ICON} Yesterday", callback_data="past_yesterday:bed"),
             ],
             [
-                InlineKeyboardButton(f"{HOME_ICON} {CALENDAR_ICON} Date", callback_data="past_date:home"),
-                InlineKeyboardButton(f"{BED_ICON} {CALENDAR_ICON} Date", callback_data="past_date:bed"),
+                InlineKeyboardButton(f"{HOME_ICON} Earlier", callback_data="past_date:home"),
+                InlineKeyboardButton(f"{BED_ICON} Earlier", callback_data="past_date:bed"),
             ],
             [InlineKeyboardButton("Cancel", callback_data="menu:main")],
         ]
@@ -500,11 +510,24 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
             )
             return
         day = current_utc_datetime().date() - datetime.timedelta(days=1)
-        record = tracking_service.record(user_id, activity, build_activity_timestamp(activity, day, time_value))
+        ddd_activity = DddActivity[activity.name]
+        result = record_activity.handle(
+            RecordActivityForDayCommand(
+                user_id=user_id,
+                activity=ddd_activity,
+                activity_date=day,
+                activity_time=time_value,
+            )
+        )
+        saved_ts = result.record.time.to_datetime()
+        tracking_service.record(user_id, activity, saved_ts)
         clear_pending_action(context)
         await update.message.reply_text(
-            f"{activity_icon(activity)} Saved {activity_name(activity)} for "
-            f"{format_saved_event(activity, record.timestamp)}.",
+            week_details_text.details_for_week(
+                user_id=user_id,
+                activity=ddd_activity,
+                date=result.record.time.date,
+            ),
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -517,15 +540,24 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
                 reply_markup=pending_reply_markup(kind),
             )
             return
-        record = tracking_service.record(
-            user_id,
-            activity,
-            build_activity_timestamp(activity, timestamp.date(), timestamp.time()),
+        ddd_activity = DddActivity[activity.name]
+        result = record_activity.handle(
+            RecordActivityForDayCommand(
+                user_id=user_id,
+                activity=ddd_activity,
+                activity_date=timestamp.date(),
+                activity_time=timestamp.time(),
+            )
         )
+        saved_ts = result.record.time.to_datetime()
+        tracking_service.record(user_id, activity, saved_ts)
         clear_pending_action(context)
         await update.message.reply_text(
-            f"{activity_icon(activity)} Saved {activity_name(activity)} for "
-            f"{format_saved_event(activity, record.timestamp)}.",
+            week_details_text.details_for_week(
+                user_id=user_id,
+                activity=ddd_activity,
+                date=result.record.time.date,
+            ),
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -635,8 +667,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if activity is None:
             text = "Unknown activity."
         else:
-            record = tracking_service.record(user_id, activity, current_utc_datetime())
-            text = f"{activity_icon(activity)} Recorded {activity_name(activity)} for {format_saved_event(activity, record.timestamp)}."
+            occurred_at = current_utc_datetime()
+            ddd_activity = DddActivity[activity.name]
+            result = record_activity.handle(
+                RecordActivityNowCommand(
+                    user_id=user_id,
+                    activity=ddd_activity,
+                    occurred_at=occurred_at,
+                )
+            )
+            saved_ts = result.record.time.to_datetime()
+            tracking_service.record(user_id, activity, saved_ts)
+            text = week_details_text.details_for_week(
+                user_id=user_id,
+                activity=ddd_activity,
+                date=result.record.time.date,
+            )
     elif query.data.startswith("past_yesterday:"):
         token = query.data.split(":", 1)[1]
         activity = parse_activity_token(token)
