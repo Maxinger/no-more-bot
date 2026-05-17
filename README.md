@@ -1,8 +1,6 @@
 # NoMoreBot
 
-A minimal Telegram bot to track activities. Two buttons: record now and show history.
-
-Current implementation uses an in-memory service layer (`TrackingService` + `InMemoryTracker`).
+A minimal Telegram bot to track activities with a DDD learning-path implementation.
 
 ## Setup
 
@@ -23,7 +21,8 @@ Current implementation uses an in-memory service layer (`TrackingService` + `InM
 
 ## Usage
 
-- **Record now** — Saves the current time (UTC) as activity `going_to_bed`.
-- **Show history** — Displays activity records for the last 14 days.
+- **Now** — Saves a home or bed activity immediately.
+- **Past** — Saves a home or bed activity for yesterday or a specific date/time.
+- **Goals** — Placeholder for the future goals workflow.
 
 Data is stored in memory, so records are reset when the bot process restarts.

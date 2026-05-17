@@ -58,204 +58,12 @@ telegram_ext_module.filters = types.SimpleNamespace(ALL=object(), TEXT=object(),
 sys.modules.setdefault("telegram.ext", telegram_ext_module)
 
 import bot
-from application.tracking_service import TrackingService
 from ddd.domain import Record, RecordTime
-from domain.model.record import Activity
-from infra.tracker.in_memory import InMemoryTracker
 
 
 class BotHelpersTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.original_tracking_service = bot.tracking_service
-        bot.tracking_service = TrackingService(InMemoryTracker())
-
-    def tearDown(self) -> None:
-        bot.tracking_service = self.original_tracking_service
-
-    def test_format_activity_report_groups_records_by_goal_week_with_deltas(self) -> None:
-        user_id = 123
-        bot.tracking_service.set_goal(Activity.HOME, datetime.time(18, 0), datetime.date(2026, 4, 6))
-        bot.tracking_service.set_goal(Activity.HOME, datetime.time(18, 30), datetime.date(2026, 4, 13))
-        bot.tracking_service.record(
-            user_id,
-            Activity.HOME,
-            datetime.datetime(2026, 4, 6, 19, 15, tzinfo=datetime.timezone.utc),
-        )
-        bot.tracking_service.record(
-            user_id,
-            Activity.HOME,
-            datetime.datetime(2026, 4, 7, 18, 45, tzinfo=datetime.timezone.utc),
-        )
-        bot.tracking_service.record(
-            user_id,
-            Activity.HOME,
-            datetime.datetime(2026, 4, 13, 20, 0, tzinfo=datetime.timezone.utc),
-        )
-
-        report = bot.format_activity_report(user_id, Activity.HOME)
-
-        self.assertEqual(
-            report,
-            "\n".join(
-                [
-                    "06.04.2026 goal: 18:00",
-                    "Mon  19:15    -75",
-                    "Tue  18:45    -45",
-                    "---",
-                    "Total        -120",
-                    "",
-                    "13.04.2026 goal: 18:30",
-                    "Mon  20:00    -90",
-                    "---",
-                    "Total         -90",
-                ]
-            ),
-        )
-
-    def test_format_activity_report_uses_previous_day_for_after_midnight_bed(self) -> None:
-        user_id = 123
-        bot.tracking_service.record(
-            user_id,
-            Activity.BED,
-            datetime.datetime(2026, 4, 7, 0, 15, tzinfo=datetime.timezone.utc),
-        )
-
-        report = bot.format_activity_report(user_id, Activity.BED)
-
-        self.assertEqual(
-            report,
-            "\n".join(
-                [
-                    "06.04.2026 goal: (not set)",
-                    "Mon  00:15",
-                    "---",
-                ]
-            ),
-        )
-
-    def test_bed_report_matches_midnight_goal_format(self) -> None:
-        user_id = 123
-        bot.tracking_service.set_goal(Activity.BED, datetime.time(0, 0), datetime.date(2026, 3, 30))
-        for timestamp in (
-            datetime.datetime(2026, 3, 31, 0, 0, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2026, 4, 1, 0, 4, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2026, 4, 2, 0, 5, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2026, 4, 3, 0, 3, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2026, 4, 4, 23, 15, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2026, 4, 5, 23, 32, tzinfo=datetime.timezone.utc),
-        ):
-            bot.tracking_service.record(user_id, Activity.BED, timestamp)
-
-        report = bot.format_activity_report(user_id, Activity.BED)
-
-        self.assertEqual(
-            report,
-            "\n".join(
-                [
-                    "30.03.2026 goal: 00:00",
-                    "Mon  00:00      0",
-                    "Tue  00:04     -4",
-                    "Wed  00:05     -5",
-                    "Thu  00:03     -3",
-                    "Sat  23:15    +15",
-                    "Sun  23:32    +28",
-                    "---",
-                    "Total         +31",
-                ]
-            ),
-        )
-
-    def test_goal_delta_minutes_handles_midnight_wraparound(self) -> None:
-        goal = datetime.time(0, 0)
-
-        self.assertEqual(bot.goal_delta_minutes(Activity.BED, goal, datetime.time(0, 4)), -4)
-        self.assertEqual(bot.goal_delta_minutes(Activity.BED, goal, datetime.time(23, 32)), 28)
-
-    def test_bed_report_keeps_before_midnight_records_on_their_day(self) -> None:
-        user_id = 123
-        bot.tracking_service.set_goal(Activity.BED, datetime.time(23, 55), datetime.date(2026, 4, 6))
-        for timestamp in (
-            datetime.datetime(2026, 4, 7, 0, 10, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2026, 4, 7, 23, 50, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2026, 4, 8, 23, 45, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2026, 4, 11, 0, 5, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2026, 4, 12, 0, 15, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2026, 4, 12, 23, 25, tzinfo=datetime.timezone.utc),
-        ):
-            bot.tracking_service.record(user_id, Activity.BED, timestamp)
-
-        report = bot.format_activity_report(user_id, Activity.BED)
-
-        self.assertEqual(
-            report,
-            "\n".join(
-                [
-                    "06.04.2026 goal: 23:55",
-                    "Mon  00:10    -15",
-                    "Tue  23:50     +5",
-                    "Wed  23:45    +10",
-                    "Fri  00:05    -10",
-                    "Sat  00:15    -20",
-                    "Sun  23:25    +30",
-                    "---",
-                    "Total           0",
-                ]
-            ),
-        )
-
-    @patch("bot.current_utc_datetime")
-    def test_format_current_week_report_only_shows_current_week(self, mock_now: object) -> None:
-        mock_now.return_value = datetime.datetime(2026, 4, 30, 9, 0, tzinfo=datetime.timezone.utc)
-        user_id = 123
-        bot.tracking_service.set_goal(Activity.HOME, datetime.time(20, 10), datetime.date(2026, 4, 20))
-        bot.tracking_service.set_goal(Activity.HOME, datetime.time(20, 20), datetime.date(2026, 4, 27))
-        bot.tracking_service.set_goal(Activity.BED, datetime.time(0, 0), datetime.date(2026, 4, 27))
-        bot.tracking_service.record(
-            user_id,
-            Activity.HOME,
-            datetime.datetime(2026, 4, 22, 20, 0, tzinfo=datetime.timezone.utc),
-        )
-        bot.tracking_service.record(
-            user_id,
-            Activity.HOME,
-            datetime.datetime(2026, 4, 29, 20, 5, tzinfo=datetime.timezone.utc),
-        )
-        bot.tracking_service.record(
-            user_id,
-            Activity.BED,
-            datetime.datetime(2026, 4, 27, 23, 50, tzinfo=datetime.timezone.utc),
-        )
-        bot.tracking_service.record(
-            user_id,
-            Activity.BED,
-            datetime.datetime(2026, 4, 30, 0, 15, tzinfo=datetime.timezone.utc),
-        )
-
-        report = bot.format_current_week_report(bot.DddUser(user_id))
-
-        self.assertEqual(
-            report,
-            "\n".join(
-                [
-                    "Home",
-                    "27.04.2026 goal: 20:20",
-                    "Wed  20:05    +15",
-                    "---",
-                    "Total         +15",
-                    "",
-                    "Bed",
-                    "27.04.2026 goal: 00:00",
-                    "Mon  23:50    +10",
-                    "Wed  00:15    -15",
-                    "---",
-                    "Total          -5",
-                ]
-            ),
-        )
-        self.assertNotIn("20.04.2026", report)
-
     def test_pending_reply_markup_contains_back_to_menu_button(self) -> None:
-        markup = bot.pending_reply_markup("goal_current")
+        markup = bot.pending_reply_markup("event_yesterday")
 
         self.assertEqual(len(markup.inline_keyboard[0]), 1)
         self.assertEqual(markup.inline_keyboard[0][0].text, "Back to Menu")
@@ -269,13 +77,13 @@ class BotHelpersTest(unittest.TestCase):
         self.assertEqual(back_row[0].text, "Back to Menu")
         self.assertEqual(back_row[0].callback_data, "menu:main")
 
-    def test_goals_menu_contains_wide_back_to_menu_button(self) -> None:
+    def test_goals_menu_is_placeholder_with_back_to_menu_button(self) -> None:
         markup = bot.goals_menu_keyboard()
 
-        back_row = markup.inline_keyboard[-1]
-        self.assertEqual(len(back_row), 1)
-        self.assertEqual(back_row[0].text, "Back to Menu")
-        self.assertEqual(back_row[0].callback_data, "menu:main")
+        self.assertEqual(len(markup.inline_keyboard), 1)
+        self.assertEqual(len(markup.inline_keyboard[0]), 1)
+        self.assertEqual(markup.inline_keyboard[0][0].text, "Back to Menu")
+        self.assertEqual(markup.inline_keyboard[0][0].callback_data, "menu:main")
 
 
 class FakeMessage:
@@ -304,9 +112,7 @@ class FakeRecordActivity:
     def handle(self, command):
         self.command = command
         if hasattr(command, "occurred_at"):
-            record_time = RecordTime.from_datetime(
-                command.occurred_at, command.user.time_zone
-            )
+            record_time = RecordTime.from_datetime(command.occurred_at, command.user.time_zone)
         else:
             record_time = RecordTime(command.activity_date, command.activity_time)
         return types.SimpleNamespace(
@@ -351,7 +157,7 @@ class StartHandlerTest(unittest.IsolatedAsyncioTestCase):
         original_summary_text = bot.current_week_summary_text
         bot.current_week_summary_text = FakeCurrentWeekSummaryText()
         message = FakeMessage()
-        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "goal_current"}})
+        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_date"}})
         update = types.SimpleNamespace(
             effective_user=types.SimpleNamespace(id=123, username="maxi"),
             effective_chat=types.SimpleNamespace(id=456),
@@ -373,18 +179,16 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
     async def test_yesterday_recording_replies_with_week_details_for_yesterday(self) -> None:
         original_record_activity = bot.record_activity
         original_week_details_text = bot.week_details_text
-        original_tracking_service = bot.tracking_service
         fake_record_activity = FakeRecordActivity()
         fake_week_details_text = FakeWeekDetailsText()
         bot.record_activity = fake_record_activity
         bot.week_details_text = fake_week_details_text
-        bot.tracking_service = TrackingService(InMemoryTracker())
         message = FakeMessage()
         context = types.SimpleNamespace(
             user_data={
                 bot.USER_DATA_PENDING_ACTION: {
                     "kind": "event_yesterday",
-                    "activity": Activity.HOME,
+                    "activity": bot.DddActivity.HOME,
                 }
             }
         )
@@ -402,34 +206,29 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         finally:
             bot.record_activity = original_record_activity
             bot.week_details_text = original_week_details_text
-            bot.tracking_service = original_tracking_service
 
         self.assertIsInstance(fake_record_activity.command, bot.RecordActivityForDayCommand)
         self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 17))
         self.assertEqual(fake_record_activity.command.activity_time, datetime.time(20, 1))
+        self.assertEqual(fake_record_activity.command.activity, bot.DddActivity.HOME)
         self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.HOME, datetime.date(2026, 5, 17))])
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
-        self.assertEqual(
-            message.replies[0]["text"],
-            "Week details for going_home on 2026-05-17",
-        )
+        self.assertEqual(message.replies[0]["text"], "Week details for going_home on 2026-05-17")
         self.assertIsNotNone(message.replies[0]["reply_markup"])
 
     async def test_yesterday_recording_uses_minsk_date_near_utc_midnight(self) -> None:
         original_record_activity = bot.record_activity
         original_week_details_text = bot.week_details_text
-        original_tracking_service = bot.tracking_service
         fake_record_activity = FakeRecordActivity()
         fake_week_details_text = FakeWeekDetailsText()
         bot.record_activity = fake_record_activity
         bot.week_details_text = fake_week_details_text
-        bot.tracking_service = TrackingService(InMemoryTracker())
         message = FakeMessage()
         context = types.SimpleNamespace(
             user_data={
                 bot.USER_DATA_PENDING_ACTION: {
                     "kind": "event_yesterday",
-                    "activity": Activity.HOME,
+                    "activity": bot.DddActivity.HOME,
                 }
             }
         )
@@ -447,7 +246,6 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         finally:
             bot.record_activity = original_record_activity
             bot.week_details_text = original_week_details_text
-            bot.tracking_service = original_tracking_service
 
         self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 17))
         self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.HOME, datetime.date(2026, 5, 17))])
@@ -455,18 +253,16 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
     async def test_past_date_recording_replies_with_week_details_for_entered_date(self) -> None:
         original_record_activity = bot.record_activity
         original_week_details_text = bot.week_details_text
-        original_tracking_service = bot.tracking_service
         fake_record_activity = FakeRecordActivity()
         fake_week_details_text = FakeWeekDetailsText()
         bot.record_activity = fake_record_activity
         bot.week_details_text = fake_week_details_text
-        bot.tracking_service = TrackingService(InMemoryTracker())
         message = FakeMessage()
         context = types.SimpleNamespace(
             user_data={
                 bot.USER_DATA_PENDING_ACTION: {
                     "kind": "event_date",
-                    "activity": Activity.BED,
+                    "activity": bot.DddActivity.BED,
                 }
             }
         )
@@ -480,17 +276,14 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         finally:
             bot.record_activity = original_record_activity
             bot.week_details_text = original_week_details_text
-            bot.tracking_service = original_tracking_service
 
         self.assertIsInstance(fake_record_activity.command, bot.RecordActivityForDayCommand)
         self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 17))
         self.assertEqual(fake_record_activity.command.activity_time, datetime.time(0, 15))
+        self.assertEqual(fake_record_activity.command.activity, bot.DddActivity.BED)
         self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.BED, datetime.date(2026, 5, 17))])
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
-        self.assertEqual(
-            message.replies[0]["text"],
-            "Week details for going_to_bed on 2026-05-17",
-        )
+        self.assertEqual(message.replies[0]["text"], "Week details for going_to_bed on 2026-05-17")
         self.assertIsNotNone(message.replies[0]["reply_markup"])
 
 
@@ -503,7 +296,7 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             effective_user=types.SimpleNamespace(id=123),
             callback_query=query,
         )
-        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "goal_current"}})
+        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_date"}})
 
         try:
             await bot.button_callback(update, context)
@@ -515,15 +308,29 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertIsNotNone(query.edits[0]["reply_markup"])
 
+    async def test_goals_button_shows_placeholder_with_back_to_menu(self) -> None:
+        query = FakeCallbackQuery("menu:goals")
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            callback_query=query,
+        )
+        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_date"}})
+
+        await bot.button_callback(update, context)
+
+        self.assertEqual(query.answers, 1)
+        self.assertIn("Goals are temporarily unavailable", query.edits[0]["text"])
+        self.assertIsNone(query.edits[0]["parse_mode"])
+        self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][0].callback_data, "menu:main")
+        self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
+
     async def test_record_now_uses_minsk_timezone_near_utc_midnight(self) -> None:
         original_record_activity = bot.record_activity
         original_week_details_text = bot.week_details_text
-        original_tracking_service = bot.tracking_service
         fake_record_activity = FakeRecordActivity()
         fake_week_details_text = FakeWeekDetailsText()
         bot.record_activity = fake_record_activity
         bot.week_details_text = fake_week_details_text
-        bot.tracking_service = TrackingService(InMemoryTracker())
         query = FakeCallbackQuery("record_now:bed")
         update = types.SimpleNamespace(
             effective_user=types.SimpleNamespace(id=123),
@@ -540,7 +347,6 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
         finally:
             bot.record_activity = original_record_activity
             bot.week_details_text = original_week_details_text
-            bot.tracking_service = original_tracking_service
 
         self.assertEqual(query.answers, 1)
         self.assertIsInstance(fake_record_activity.command, bot.RecordActivityNowCommand)
@@ -555,6 +361,7 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             ).time(),
             datetime.time(1, 30, 45),
         )
+        self.assertEqual(fake_record_activity.command.activity, bot.DddActivity.BED)
         self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.BED, datetime.date(2026, 5, 17))])
         self.assertEqual(query.edits[0]["text"], "Week details for going_to_bed on 2026-05-17")
 
