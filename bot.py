@@ -16,28 +16,28 @@ from telegram.ext import (
     filters,
 )
 
-from ddd.application import (
+from application import (
     LoadWeekProgressUseCase,
     RecordActivityForDayCommand,
     RecordActivityNowCommand,
     RecordActivityUseCase,
 )
-from ddd.domain.record import Activity as DddActivity
-from ddd.domain.user import User as DddUser
-from ddd.infra import InMemoryRepositories
-from ddd.infra.dev import apply_initial_data_fixture as apply_ddd_initial_data_fixture
-from ddd.representation import CurrentWeekSummaryText, WeekDetailsText
+from domain.record import Activity
+from domain.user import User
+from infra import InMemoryRepositories
+from infra.dev import apply_initial_data_fixture
+from representation import CurrentWeekSummaryText, WeekDetailsText
 
 logger = logging.getLogger(__name__)
-ddd_repositories = InMemoryRepositories()
-apply_ddd_initial_data_fixture(ddd_repositories)
+repositories = InMemoryRepositories()
+apply_initial_data_fixture(repositories)
 current_week_summary_text = CurrentWeekSummaryText(
-    LoadWeekProgressUseCase(ddd_repositories.goals, ddd_repositories.records)
+    LoadWeekProgressUseCase(repositories.goals, repositories.records)
 )
 week_details_text = WeekDetailsText(
-    LoadWeekProgressUseCase(ddd_repositories.goals, ddd_repositories.records)
+    LoadWeekProgressUseCase(repositories.goals, repositories.records)
 )
-record_activity = RecordActivityUseCase(ddd_repositories.records)
+record_activity = RecordActivityUseCase(repositories.records)
 
 USER_DATA_PENDING_ACTION = "pending_action"
 HOME_ICON = "🏠"
@@ -99,12 +99,12 @@ def goals_menu_keyboard() -> InlineKeyboardMarkup:
     return back_to_menu_keyboard()
 
 
-def parse_activity_token(token: str) -> DddActivity | None:
+def parse_activity_token(token: str) -> Activity | None:
     t = token.strip().lower()
     if t in ("bed", "going_to_bed"):
-        return DddActivity.BED
+        return Activity.BED
     if t in ("home", "going_home"):
-        return DddActivity.HOME
+        return Activity.HOME
     return None
 
 
@@ -134,12 +134,12 @@ def current_utc_datetime() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
-def current_date_for_user(user: DddUser) -> datetime.date:
+def current_date_for_user(user: User) -> datetime.date:
     return current_utc_datetime().astimezone(user.time_zone).date()
 
 
-def activity_name(activity: DddActivity) -> str:
-    return "Home" if activity == DddActivity.HOME else "Bed"
+def activity_name(activity: Activity) -> str:
+    return "Home" if activity == Activity.HOME else "Bed"
 
 
 def clear_pending_action(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -149,7 +149,7 @@ def clear_pending_action(context: ContextTypes.DEFAULT_TYPE) -> None:
 def set_pending_action(
     context: ContextTypes.DEFAULT_TYPE,
     kind: str,
-    activity: DddActivity,
+    activity: Activity,
     week_start: datetime.date | None = None,
 ) -> None:
     pending: dict[str, Any] = {"kind": kind, "activity": activity}
@@ -173,7 +173,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     if update.message:
         text = (
-            current_week_summary_text.summary_for_current_week(DddUser(user.id))
+            current_week_summary_text.summary_for_current_week(User(user.id))
             if user is not None
             else "Current week is not available."
         )
@@ -228,10 +228,10 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
     kind = pending.get("kind")
     activity = pending.get("activity")
     user_id = update.effective_user.id if update.effective_user else None
-    if not isinstance(kind, str) or not isinstance(activity, DddActivity) or user_id is None:
+    if not isinstance(kind, str) or not isinstance(activity, Activity) or user_id is None:
         clear_pending_action(context)
         return
-    user = DddUser(user_id)
+    user = User(user_id)
 
     if kind == "event_yesterday":
         time_value = parse_hhmm(text)
@@ -296,7 +296,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if query is None or update.effective_user is None:
         return
     user_id = update.effective_user.id
-    user = DddUser(user_id)
+    user = User(user_id)
     logger.info("PROCESS callback data=%r user_id=%s", query.data, user_id)
     await query.answer()
 
@@ -319,7 +319,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         reply_markup = past_menu_keyboard()
     elif query.data == "menu:goals":
         clear_pending_action(context)
-        text = "Goals are temporarily unavailable while the new DDD goals workflow is being built."
+        text = "Goals are temporarily unavailable while the new goals workflow is being built."
         reply_markup = goals_menu_keyboard()
     elif query.data.startswith("record_now:"):
         clear_pending_action(context)

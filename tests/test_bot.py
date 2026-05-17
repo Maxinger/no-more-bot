@@ -58,7 +58,7 @@ telegram_ext_module.filters = types.SimpleNamespace(ALL=object(), TEXT=object(),
 sys.modules.setdefault("telegram.ext", telegram_ext_module)
 
 import bot
-from ddd.domain import Record, RecordTime
+from domain import Record, RecordTime
 
 
 class BotHelpersTest(unittest.TestCase):
@@ -101,7 +101,7 @@ class FakeMessage:
 
 
 class FakeCurrentWeekSummaryText:
-    def summary_for_current_week(self, user: bot.DddUser) -> str:
+    def summary_for_current_week(self, user: bot.User) -> str:
         return f"Current week summary for {user.id}"
 
 
@@ -188,7 +188,7 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
             user_data={
                 bot.USER_DATA_PENDING_ACTION: {
                     "kind": "event_yesterday",
-                    "activity": bot.DddActivity.HOME,
+                    "activity": bot.Activity.HOME,
                 }
             }
         )
@@ -210,8 +210,8 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(fake_record_activity.command, bot.RecordActivityForDayCommand)
         self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 17))
         self.assertEqual(fake_record_activity.command.activity_time, datetime.time(20, 1))
-        self.assertEqual(fake_record_activity.command.activity, bot.DddActivity.HOME)
-        self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.HOME, datetime.date(2026, 5, 17))])
+        self.assertEqual(fake_record_activity.command.activity, bot.Activity.HOME)
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.Activity.HOME, datetime.date(2026, 5, 17))])
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertEqual(message.replies[0]["text"], "Week details for going_home on 2026-05-17")
         self.assertIsNotNone(message.replies[0]["reply_markup"])
@@ -228,7 +228,7 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
             user_data={
                 bot.USER_DATA_PENDING_ACTION: {
                     "kind": "event_yesterday",
-                    "activity": bot.DddActivity.HOME,
+                    "activity": bot.Activity.HOME,
                 }
             }
         )
@@ -248,7 +248,7 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
             bot.week_details_text = original_week_details_text
 
         self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 17))
-        self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.HOME, datetime.date(2026, 5, 17))])
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.Activity.HOME, datetime.date(2026, 5, 17))])
 
     async def test_past_date_recording_replies_with_week_details_for_entered_date(self) -> None:
         original_record_activity = bot.record_activity
@@ -262,7 +262,7 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
             user_data={
                 bot.USER_DATA_PENDING_ACTION: {
                     "kind": "event_date",
-                    "activity": bot.DddActivity.BED,
+                    "activity": bot.Activity.BED,
                 }
             }
         )
@@ -280,8 +280,8 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(fake_record_activity.command, bot.RecordActivityForDayCommand)
         self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 17))
         self.assertEqual(fake_record_activity.command.activity_time, datetime.time(0, 15))
-        self.assertEqual(fake_record_activity.command.activity, bot.DddActivity.BED)
-        self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.BED, datetime.date(2026, 5, 17))])
+        self.assertEqual(fake_record_activity.command.activity, bot.Activity.BED)
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.Activity.BED, datetime.date(2026, 5, 17))])
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertEqual(message.replies[0]["text"], "Week details for going_to_bed on 2026-05-17")
         self.assertIsNotNone(message.replies[0]["reply_markup"])
@@ -361,8 +361,8 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             ).time(),
             datetime.time(1, 30, 45),
         )
-        self.assertEqual(fake_record_activity.command.activity, bot.DddActivity.BED)
-        self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.BED, datetime.date(2026, 5, 17))])
+        self.assertEqual(fake_record_activity.command.activity, bot.Activity.BED)
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.Activity.BED, datetime.date(2026, 5, 17))])
         self.assertEqual(query.edits[0]["text"], "Week details for going_to_bed on 2026-05-17")
 
 

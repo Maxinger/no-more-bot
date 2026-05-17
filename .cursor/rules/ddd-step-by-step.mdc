@@ -1,15 +1,15 @@
 ---
-description: Keep DDD migration gradual and educational
+description: Keep domain-driven changes gradual and educational
 alwaysApply: true
 ---
 
-# Step-By-Step DDD Progress
+# Step-By-Step Domain-Driven Progress
 
 This project is intentionally exploring Domain-Driven Design in small, understandable steps.
 
-- Preserve the user's learning goal: explain DDD choices briefly when introducing concepts like value objects, entities, aggregates, commands, use cases, repositories, and domain events.
-- Prefer incremental changes over large rewrites. Keep the existing working bot behavior stable while building the `ddd/` package as a learning path.
-- Follow the current draft structure: `ddd/domain` for domain objects, `ddd/domain/ports` for repository contracts, and `ddd/application/use_cases` for commands and use cases.
+- Preserve the user's learning goal: explain domain-driven choices briefly when introducing concepts like value objects, entities, aggregates, commands, use cases, repositories, and domain events.
+- Prefer incremental changes over large rewrites. Keep the existing working bot behavior stable while evolving the root application packages as a learning path.
+- Follow the current structure: `domain` for domain objects, `domain/ports` for repository contracts, and `application/use_cases` for commands and use cases.
 - Keep domain rules out of Telegram adapters and infrastructure. UI code should parse input; domain/application code should own business decisions like logical day cutoff and week normalization.
 - When adding use cases, prefer explicit command objects and a single public `handle(command)` entry point using the lightweight `@handles(...)` dispatcher.
 - Add focused tests near the package path they exercise, mirroring the source layout under `tests/`.

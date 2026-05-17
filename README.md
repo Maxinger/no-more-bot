@@ -1,6 +1,6 @@
 # NoMoreBot
 
-A minimal Telegram bot to track activities with a DDD learning-path implementation.
+A minimal Telegram bot to track activities with a domain-driven implementation.
 
 ## Setup
 
