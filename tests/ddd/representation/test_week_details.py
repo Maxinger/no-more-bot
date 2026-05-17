@@ -2,7 +2,7 @@ import datetime
 import unittest
 
 from ddd.application import LoadWeekProgressUseCase
-from ddd.domain import Activity, Record, RecordTime, WeekGoal, WeekStart
+from ddd.domain import Activity, Record, RecordTime, User, WeekGoal, WeekStart
 from ddd.infra.repositories import InMemoryRepositories
 from ddd.representation import WeekDetailsText
 
@@ -36,7 +36,7 @@ class WeekDetailsTextTest(unittest.TestCase):
             )
 
         text = details.details_for_week(
-            user_id=123,
+            user=User(123),
             activity=Activity.HOME,
             date=datetime.date(2026, 5, 16),
         )
@@ -66,7 +66,7 @@ class WeekDetailsTextTest(unittest.TestCase):
         )
 
         text = details.details_for_week(
-            user_id=123,
+            user=User(123),
             activity=Activity.BED,
             date=datetime.date(2026, 5, 16),
         )

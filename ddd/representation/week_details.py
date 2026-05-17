@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from ddd.application import LoadWeekProgressCommand, LoadWeekProgressUseCase
-from ddd.domain import Activity, WeekProgress, WeekStart
+from ddd.domain import Activity, User, WeekProgress, WeekStart
 from ddd.representation.current_week_summary import ACTIVITY_LABELS
 from ddd.representation.formatting_utils import (
     format_date,
@@ -22,11 +22,11 @@ class WeekDetailsText:
     def __init__(self, load_week_progress: LoadWeekProgressUseCase):
         self._load_week_progress = load_week_progress
 
-    def details_for_week(self, user_id: int, activity: Activity, date: date) -> str:
+    def details_for_week(self, user: User, activity: Activity, date: date) -> str:
         week = WeekStart.from_any_date(date)
         progress = self._load_week_progress.handle(
             LoadWeekProgressCommand(
-                user_id=user_id,
+                user=user,
                 activity=activity,
                 date=date,
             )

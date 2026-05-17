@@ -8,12 +8,13 @@ from datetime import date
 from ddd.application.use_case import UseCase, handles
 from ddd.domain.ports import RecordRepository, WeekGoalRepository
 from ddd.domain.record import Activity, WeekStart
+from ddd.domain.user import User
 from ddd.domain.week_progress import WeekProgress
 
 
 @dataclass(frozen=True)
 class LoadWeekProgressCommand:
-    user_id: int
+    user: User
     activity: Activity
     date: date
 
@@ -33,9 +34,9 @@ class LoadWeekProgressUseCase(UseCase):
         self, command: LoadWeekProgressCommand
     ) -> LoadWeekProgressResult:
         week = WeekStart.from_any_date(command.date)
-        goal = self._goals.find(command.user_id, command.activity, week)
+        goal = self._goals.find(command.user.id, command.activity, week)
         if goal is None:
             return LoadWeekProgressResult(progress=None)
 
-        records = self._records.find_for_week(command.user_id, command.activity, week)
+        records = self._records.find_for_week(command.user.id, command.activity, week)
         return LoadWeekProgressResult(progress=WeekProgress(goal=goal, records=records))

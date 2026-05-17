@@ -2,7 +2,7 @@ import datetime
 import unittest
 
 from ddd.application import LoadWeekProgressUseCase
-from ddd.domain import Activity, Record, RecordTime, WeekGoal, WeekStart
+from ddd.domain import Activity, Record, RecordTime, User, WeekGoal, WeekStart
 from ddd.infra.repositories import InMemoryRepositories
 from ddd.representation import CurrentWeekSummaryText
 
@@ -12,7 +12,9 @@ class CurrentWeekSummaryTextTest(unittest.TestCase):
         repositories = InMemoryRepositories()
         summary = CurrentWeekSummaryText(
             LoadWeekProgressUseCase(repositories.goals, repositories.records),
-            current_date=lambda: datetime.date(2026, 5, 7),
+            current_datetime=lambda: datetime.datetime(
+                2026, 5, 7, 9, 0, tzinfo=datetime.timezone.utc
+            ),
         )
         week = WeekStart(datetime.date(2026, 5, 4))
         repositories.goals.save(
@@ -53,7 +55,7 @@ class CurrentWeekSummaryTextTest(unittest.TestCase):
             )
         )
 
-        text = summary.summary_for_current_week(user_id=123)
+        text = summary.summary_for_current_week(User(123))
 
         self.assertEqual(
             text,
@@ -72,7 +74,9 @@ class CurrentWeekSummaryTextTest(unittest.TestCase):
         repositories = InMemoryRepositories()
         summary = CurrentWeekSummaryText(
             LoadWeekProgressUseCase(repositories.goals, repositories.records),
-            current_date=lambda: datetime.date(2026, 5, 7),
+            current_datetime=lambda: datetime.datetime(
+                2026, 5, 7, 9, 0, tzinfo=datetime.timezone.utc
+            ),
         )
         repositories.goals.save(
             WeekGoal(
@@ -83,13 +87,45 @@ class CurrentWeekSummaryTextTest(unittest.TestCase):
             )
         )
 
-        text = summary.summary_for_current_week(user_id=123)
+        text = summary.summary_for_current_week(User(123))
 
         self.assertEqual(
             text,
             "\n".join(
                 [
                     "Current week (04.05.2026)",
+                    "",
+                    "🏠 18:00 ⚪ +0 (0)",
+                    "",
+                    "🛏️ not set",
+                ]
+            ),
+        )
+
+    def test_summary_uses_user_timezone_when_utc_date_is_still_previous_week(self) -> None:
+        repositories = InMemoryRepositories()
+        summary = CurrentWeekSummaryText(
+            LoadWeekProgressUseCase(repositories.goals, repositories.records),
+            current_datetime=lambda: datetime.datetime(
+                2026, 5, 17, 22, 30, tzinfo=datetime.timezone.utc
+            ),
+        )
+        repositories.goals.save(
+            WeekGoal(
+                user_id=123,
+                activity=Activity.HOME,
+                week=WeekStart(datetime.date(2026, 5, 18)),
+                target_time=datetime.time(18, 0),
+            )
+        )
+
+        text = summary.summary_for_current_week(User(123))
+
+        self.assertEqual(
+            text,
+            "\n".join(
+                [
+                    "Current week (18.05.2026)",
                     "",
                     "🏠 18:00 ⚪ +0 (0)",
                     "",

@@ -88,11 +88,11 @@ class InitialDataJsonLoaderTest(unittest.TestCase):
         self.assertEqual(bed_record.time, RecordTime(datetime.date(2026, 4, 6), datetime.time(0, 15)))
         self.assertEqual(
             bed_record.time.to_datetime(),
-            datetime.datetime(2026, 4, 7, 0, 15, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 6, 21, 15, tzinfo=datetime.timezone.utc),
         )
         self.assertEqual(
             home_record.time.to_datetime(),
-            datetime.datetime(2026, 4, 7, 0, 15, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 4, 6, 21, 15, tzinfo=datetime.timezone.utc),
         )
 
     def test_apply_initial_data_fixture_loads_json_file_into_repository_bundle(self) -> None:

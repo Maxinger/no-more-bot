@@ -6,7 +6,7 @@ from ddd.application import (
     LoadWeekProgressResult,
     LoadWeekProgressUseCase,
 )
-from ddd.domain import Activity, Record, RecordTime, WeekGoal, WeekProgress, WeekStart
+from ddd.domain import Activity, Record, RecordTime, User, WeekGoal, WeekProgress, WeekStart
 from ddd.infra import InMemoryRecordRepository, InMemoryWeekGoalRepository
 
 
@@ -39,7 +39,7 @@ class LoadWeekProgressUseCaseTest(unittest.TestCase):
 
         result = use_case.handle(
             LoadWeekProgressCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.BED,
                 date=datetime.date(2026, 5, 7),
             )
@@ -66,7 +66,7 @@ class LoadWeekProgressUseCaseTest(unittest.TestCase):
 
         result = use_case.handle(
             LoadWeekProgressCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.HOME,
                 date=datetime.date(2026, 5, 4),
             )
@@ -85,7 +85,7 @@ class LoadWeekProgressUseCaseTest(unittest.TestCase):
 
         result = use_case.handle(
             LoadWeekProgressCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.HOME,
                 date=datetime.date(2026, 5, 4),
             )

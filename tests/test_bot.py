@@ -231,7 +231,7 @@ class BotHelpersTest(unittest.TestCase):
             datetime.datetime(2026, 4, 30, 0, 15, tzinfo=datetime.timezone.utc),
         )
 
-        report = bot.format_current_week_report(user_id)
+        report = bot.format_current_week_report(bot.DddUser(user_id))
 
         self.assertEqual(
             report,
@@ -290,8 +290,8 @@ class FakeMessage:
 
 
 class FakeCurrentWeekSummaryText:
-    def summary_for_current_week(self, user_id: int) -> str:
-        return f"Current week summary for {user_id}"
+    def summary_for_current_week(self, user: bot.DddUser) -> str:
+        return f"Current week summary for {user.id}"
 
 
 class FakeRecordActivity:
@@ -300,11 +300,17 @@ class FakeRecordActivity:
 
     def handle(self, command):
         self.command = command
+        if hasattr(command, "occurred_at"):
+            record_time = RecordTime.from_datetime(
+                command.occurred_at, command.user.time_zone
+            )
+        else:
+            record_time = RecordTime(command.activity_date, command.activity_time)
         return types.SimpleNamespace(
             record=Record(
-                user_id=command.user_id,
+                user_id=command.user.id,
                 activity=command.activity,
-                time=RecordTime(command.activity_date, command.activity_time),
+                time=record_time,
             )
         )
 
@@ -313,9 +319,28 @@ class FakeWeekDetailsText:
     def __init__(self) -> None:
         self.calls = []
 
-    def details_for_week(self, user_id, activity, date):
-        self.calls.append((user_id, activity, date))
+    def details_for_week(self, user, activity, date):
+        self.calls.append((user.id, activity, date))
         return f"Week details for {activity.value} on {date.isoformat()}"
+
+
+class FakeCallbackQuery:
+    def __init__(self, data: str) -> None:
+        self.data = data
+        self.answers = 0
+        self.edits = []
+
+    async def answer(self) -> None:
+        self.answers += 1
+
+    async def edit_message_text(self, text, reply_markup=None, parse_mode=None):
+        self.edits.append(
+            {
+                "text": text,
+                "reply_markup": reply_markup,
+                "parse_mode": parse_mode,
+            }
+        )
 
 
 class StartHandlerTest(unittest.IsolatedAsyncioTestCase):
@@ -387,6 +412,43 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNotNone(message.replies[0]["reply_markup"])
 
+    async def test_yesterday_recording_uses_minsk_date_near_utc_midnight(self) -> None:
+        original_record_activity = bot.record_activity
+        original_week_details_text = bot.week_details_text
+        original_tracking_service = bot.tracking_service
+        fake_record_activity = FakeRecordActivity()
+        fake_week_details_text = FakeWeekDetailsText()
+        bot.record_activity = fake_record_activity
+        bot.week_details_text = fake_week_details_text
+        bot.tracking_service = TrackingService(InMemoryTracker())
+        message = FakeMessage()
+        context = types.SimpleNamespace(
+            user_data={
+                bot.USER_DATA_PENDING_ACTION: {
+                    "kind": "event_yesterday",
+                    "activity": Activity.HOME,
+                }
+            }
+        )
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            message=types.SimpleNamespace(text="20:01", reply_text=message.reply_text),
+        )
+
+        try:
+            with patch("bot.current_utc_datetime") as mock_now:
+                mock_now.return_value = datetime.datetime(
+                    2026, 5, 17, 22, 30, tzinfo=datetime.timezone.utc
+                )
+                await bot.maybe_handle_pending_input(update, context)
+        finally:
+            bot.record_activity = original_record_activity
+            bot.week_details_text = original_week_details_text
+            bot.tracking_service = original_tracking_service
+
+        self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 17))
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.HOME, datetime.date(2026, 5, 17))])
+
     async def test_past_date_recording_replies_with_week_details_for_entered_date(self) -> None:
         original_record_activity = bot.record_activity
         original_week_details_text = bot.week_details_text
@@ -427,6 +489,51 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
             "Week details for going_to_bed on 2026-05-17",
         )
         self.assertIsNotNone(message.replies[0]["reply_markup"])
+
+
+class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_record_now_uses_minsk_timezone_near_utc_midnight(self) -> None:
+        original_record_activity = bot.record_activity
+        original_week_details_text = bot.week_details_text
+        original_tracking_service = bot.tracking_service
+        fake_record_activity = FakeRecordActivity()
+        fake_week_details_text = FakeWeekDetailsText()
+        bot.record_activity = fake_record_activity
+        bot.week_details_text = fake_week_details_text
+        bot.tracking_service = TrackingService(InMemoryTracker())
+        query = FakeCallbackQuery("record_now:bed")
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            callback_query=query,
+        )
+        context = types.SimpleNamespace(user_data={})
+
+        try:
+            with patch("bot.current_utc_datetime") as mock_now:
+                mock_now.return_value = datetime.datetime(
+                    2026, 5, 17, 22, 30, 45, tzinfo=datetime.timezone.utc
+                )
+                await bot.button_callback(update, context)
+        finally:
+            bot.record_activity = original_record_activity
+            bot.week_details_text = original_week_details_text
+            bot.tracking_service = original_tracking_service
+
+        self.assertEqual(query.answers, 1)
+        self.assertIsInstance(fake_record_activity.command, bot.RecordActivityNowCommand)
+        self.assertEqual(fake_record_activity.command.user.id, 123)
+        self.assertEqual(
+            fake_record_activity.command.occurred_at,
+            datetime.datetime(2026, 5, 17, 22, 30, 45, tzinfo=datetime.timezone.utc),
+        )
+        self.assertEqual(
+            fake_record_activity.command.occurred_at.astimezone(
+                fake_record_activity.command.user.time_zone
+            ).time(),
+            datetime.time(1, 30, 45),
+        )
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.DddActivity.BED, datetime.date(2026, 5, 17))])
+        self.assertEqual(query.edits[0]["text"], "Week details for going_to_bed on 2026-05-17")
 
 
 if __name__ == "__main__":

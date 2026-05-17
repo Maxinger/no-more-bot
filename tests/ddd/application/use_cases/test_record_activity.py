@@ -7,7 +7,7 @@ from ddd.application import (
     RecordActivityResult,
     RecordActivityUseCase,
 )
-from ddd.domain import Activity, Record, RecordTime, WeekStart
+from ddd.domain import Activity, Record, RecordTime, User, WeekStart
 from ddd.infra import InMemoryRecordRepository
 
 
@@ -19,11 +19,11 @@ class RecordActivityUseCaseTest(unittest.TestCase):
         expected_record = Record(
             activity=Activity.HOME,
             user_id=123,
-            time=RecordTime(datetime.date(2026, 5, 8), datetime.time(22, 30)),
+            time=RecordTime(datetime.date(2026, 5, 8), datetime.time(1, 30)),
         )
         result = use_case.handle(
             RecordActivityNowCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.HOME,
                 occurred_at=datetime.datetime(2026, 5, 8, 22, 30, tzinfo=datetime.timezone.utc),
             )
@@ -44,7 +44,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
 
         result = use_case.handle(
             RecordActivityNowCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.BED,
                 occurred_at=datetime.datetime(2026, 5, 9, 0, 15, tzinfo=datetime.timezone.utc),
             )
@@ -53,7 +53,27 @@ class RecordActivityUseCaseTest(unittest.TestCase):
         self.assertFalse(result.replaced_existing)
         self.assertEqual(
             result.record.time,
-            RecordTime(datetime.date(2026, 5, 8), datetime.time(0, 15)),
+            RecordTime(datetime.date(2026, 5, 8), datetime.time(3, 15)),
+        )
+
+    def test_record_activity_now_uses_the_command_user_timezone(self) -> None:
+        repository = InMemoryRecordRepository()
+        use_case = RecordActivityUseCase(repository)
+
+        result = use_case.handle(
+            RecordActivityNowCommand(
+                user=User(
+                    123,
+                    time_zone=datetime.timezone(datetime.timedelta(hours=-4)),
+                ),
+                activity=Activity.HOME,
+                occurred_at=datetime.datetime(2026, 5, 9, 3, 15, tzinfo=datetime.timezone.utc),
+            )
+        )
+
+        self.assertEqual(
+            result.record.time,
+            RecordTime(datetime.date(2026, 5, 8), datetime.time(23, 15)),
         )
 
     def test_record_activity_for_day_saves_record_from_logical_date_and_time(self) -> None:
@@ -67,7 +87,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
         )
         result = use_case.handle(
             RecordActivityForDayCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.BED,
                 activity_date=datetime.date(2026, 5, 8),
                 activity_time=datetime.time(0, 15),
@@ -80,7 +100,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
         )
         self.assertEqual(
             result.record.time.to_datetime(),
-            datetime.datetime(2026, 5, 9, 0, 15, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2026, 5, 8, 21, 15, tzinfo=datetime.timezone.utc),
         )
 
     def test_second_record_same_user_activity_and_logical_day_replaces_first(self) -> None:
@@ -89,7 +109,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
 
         first = use_case.handle(
             RecordActivityForDayCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.BED,
                 activity_date=datetime.date(2026, 5, 8),
                 activity_time=datetime.time(22, 0),
@@ -102,7 +122,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
         )
         second = use_case.handle(
             RecordActivityForDayCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.BED,
                 activity_date=datetime.date(2026, 5, 8),
                 activity_time=datetime.time(23, 30),
@@ -139,7 +159,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
 
         use_case.handle(
             RecordActivityForDayCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.HOME,
                 activity_date=datetime.date(2026, 5, 8),
                 activity_time=datetime.time(21, 0),
@@ -147,7 +167,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
         )
         bed = use_case.handle(
             RecordActivityForDayCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.BED,
                 activity_date=datetime.date(2026, 5, 8),
                 activity_time=datetime.time(23, 0),
@@ -164,7 +184,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
 
         day1 = use_case.handle(
             RecordActivityForDayCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.HOME,
                 activity_date=datetime.date(2026, 5, 8),
                 activity_time=datetime.time(22, 0),
@@ -172,7 +192,7 @@ class RecordActivityUseCaseTest(unittest.TestCase):
         )
         day2 = use_case.handle(
             RecordActivityForDayCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.BED,
                 activity_date=datetime.date(2026, 5, 9),
                 activity_time=datetime.time(22, 0),

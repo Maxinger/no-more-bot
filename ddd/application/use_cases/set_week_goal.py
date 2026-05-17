@@ -8,12 +8,13 @@ from datetime import time
 from ddd.application.use_case import UseCase, handles
 from ddd.domain.ports import WeekGoalRepository
 from ddd.domain.record import Activity, WeekStart
+from ddd.domain.user import User
 from ddd.domain.week_goal import WeekGoal
 
 
 @dataclass(frozen=True)
 class SetWeekGoalCommand:
-    user_id: int
+    user: User
     activity: Activity
     week: WeekStart
     target_time: time
@@ -32,10 +33,10 @@ class SetWeekGoalUseCase(UseCase):
     @handles(SetWeekGoalCommand)
     def _set_week_goal(self, command: SetWeekGoalCommand) -> SetWeekGoalResult:
         replaced_existing = (
-            self._goals.find(command.user_id, command.activity, command.week) is not None
+            self._goals.find(command.user.id, command.activity, command.week) is not None
         )
         goal = WeekGoal(
-            user_id=command.user_id,
+            user_id=command.user.id,
             activity=command.activity,
             week=command.week,
             target_time=command.target_time,

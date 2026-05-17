@@ -2,7 +2,7 @@ import datetime
 import unittest
 
 from ddd.application import SetWeekGoalCommand, SetWeekGoalResult, SetWeekGoalUseCase
-from ddd.domain import Activity, WeekGoal, WeekStart
+from ddd.domain import Activity, User, WeekGoal, WeekStart
 from ddd.infra import InMemoryWeekGoalRepository
 
 
@@ -20,7 +20,7 @@ class SetWeekGoalUseCaseTest(unittest.TestCase):
         )
         result = use_case.handle(
             SetWeekGoalCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.HOME,
                 week=WeekStart(monday),
                 target_time=datetime.time(22, 30),
@@ -37,7 +37,7 @@ class SetWeekGoalUseCaseTest(unittest.TestCase):
         monday = datetime.date(2026, 5, 4)
         first = use_case.handle(
             SetWeekGoalCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.BED,
                 week=WeekStart(monday),
                 target_time=datetime.time(22, 0),
@@ -51,7 +51,7 @@ class SetWeekGoalUseCaseTest(unittest.TestCase):
         )
         second = use_case.handle(
             SetWeekGoalCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.BED,
                 week=WeekStart(monday),
                 target_time=datetime.time(23, 30),
@@ -71,7 +71,7 @@ class SetWeekGoalUseCaseTest(unittest.TestCase):
 
         first = use_case.handle(
             SetWeekGoalCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.HOME,
                 week=WeekStart.from_any_date(wednesday),
                 target_time=datetime.time(21, 0),
@@ -85,7 +85,7 @@ class SetWeekGoalUseCaseTest(unittest.TestCase):
         )
         second = use_case.handle(
             SetWeekGoalCommand(
-                user_id=123,
+                user=User(123),
                 activity=Activity.HOME,
                 week=WeekStart(monday),
                 target_time=datetime.time(22, 0),

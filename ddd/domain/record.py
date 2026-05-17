@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from enum import Enum
+
+from ddd.domain.user import DEFAULT_TIME_ZONE
 
 
 class Activity(str, Enum):
@@ -35,19 +37,29 @@ class RecordTime:
     time: time
 
     @classmethod
-    def from_datetime(cls, value: datetime) -> "RecordTime":
-        logical_date = value.date()
-        if value.time() < DAY_START:
+    def from_datetime(
+        cls, value: datetime, time_zone: tzinfo = DEFAULT_TIME_ZONE
+    ) -> "RecordTime":
+        if value.tzinfo is None:
+            raise ValueError("RecordTime.from_datetime requires an aware datetime.")
+
+        local_value = value.astimezone(time_zone)
+        local_time = local_value.timetz().replace(
+            second=0, microsecond=0, tzinfo=None
+        )
+        logical_date = local_value.date()
+        if local_time < DAY_START:
             logical_date -= timedelta(days=1)
 
-        return cls(date=logical_date, time=value.time())
+        return cls(date=logical_date, time=local_time)
 
-    def to_datetime(self) -> datetime:
+    def to_datetime(self, time_zone: tzinfo = DEFAULT_TIME_ZONE) -> datetime:
         actual_date = self.date
         if self.time < DAY_START:
             actual_date += timedelta(days=1)
 
-        return datetime.combine(actual_date, self.time, tzinfo=timezone.utc)
+        local_value = datetime.combine(actual_date, self.time, tzinfo=time_zone)
+        return local_value.astimezone(timezone.utc)
 
     def reward_for_goal(self, target_time: time) -> int:
         """Minutes from ``to_datetime()`` to the goal instant for ``target_time`` (truncated)."""

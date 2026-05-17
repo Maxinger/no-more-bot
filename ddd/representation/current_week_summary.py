@@ -6,10 +6,10 @@ from collections.abc import Callable
 from datetime import date, datetime, timezone
 
 from ddd.application import LoadWeekProgressCommand, LoadWeekProgressUseCase
-from ddd.domain import Activity, WeekProgress, WeekStart
+from ddd.domain import Activity, User, WeekProgress, WeekStart
 from ddd.representation.formatting_utils import format_date, format_reward, format_time
 
-CurrentDateProvider = Callable[[], date]
+CurrentDateTimeProvider = Callable[[], datetime]
 
 HOME_ICON = "🏠"
 BED_ICON = "🛏️"
@@ -20,8 +20,9 @@ ACTIVITY_LABELS = {
     Activity.BED: BED_ICON,
 }
 
-def current_utc_date() -> date:
-    return datetime.now(timezone.utc).date()
+
+def current_utc_datetime() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class CurrentWeekSummaryText:
@@ -30,20 +31,20 @@ class CurrentWeekSummaryText:
     def __init__(
         self,
         load_week_progress: LoadWeekProgressUseCase,
-        current_date: CurrentDateProvider = current_utc_date,
+        current_datetime: CurrentDateTimeProvider = current_utc_datetime,
     ):
         self._load_week_progress = load_week_progress
-        self._current_date = current_date
+        self._current_datetime = current_datetime
 
-    def summary_for_current_week(self, user_id: int) -> str:
-        current_date = self._current_date()
+    def summary_for_current_week(self, user: User) -> str:
+        current_date = self._current_datetime().astimezone(user.time_zone).date()
         week = WeekStart.from_any_date(current_date)
 
         lines = [f"Current week ({format_date(week.value)})"]
         for activity in ACTIVITIES:
             progress = self._load_week_progress.handle(
                 LoadWeekProgressCommand(
-                    user_id=user_id,
+                    user=user,
                     activity=activity,
                     date=current_date,
                 )

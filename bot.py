@@ -25,6 +25,7 @@ from ddd.application import (
     RecordActivityUseCase,
 )
 from ddd.domain.record import Activity as DddActivity
+from ddd.domain.user import User as DddUser
 from ddd.infra import InMemoryRepositories
 from ddd.infra.dev import apply_initial_data_fixture as apply_ddd_initial_data_fixture
 from ddd.representation import CurrentWeekSummaryText, WeekDetailsText
@@ -161,6 +162,10 @@ def current_utc_datetime() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def current_date_for_user(user: DddUser) -> datetime.date:
+    return current_utc_datetime().astimezone(user.time_zone).date()
+
+
 def format_goal_week_label(week_start: datetime.date) -> str:
     return f"Week of {week_start.isoformat()} (Mon)"
 
@@ -212,8 +217,8 @@ def format_saved_event(activity: Activity, timestamp: datetime.datetime) -> str:
     return f"{activity_day(activity, timestamp).strftime('%Y-%m-%d')} {timestamp.strftime('%H:%M')}"
 
 
-def current_goal_summary(activity: Activity) -> str:
-    week = monday_of_week_containing(current_utc_datetime().date())
+def current_goal_summary(user: DddUser, activity: Activity) -> str:
+    week = monday_of_week_containing(current_date_for_user(user))
     try:
         goal = tracking_service.get_goal(activity, week_start=week)
     except KeyError:
@@ -319,8 +324,8 @@ def format_activity_report(user_id: int, activity: Activity) -> str:
     return "\n".join(lines)
 
 
-def format_current_week_report(user_id: int) -> str:
-    week_start = monday_of_week_containing(current_utc_datetime().date())
+def format_current_week_report(user: DddUser) -> str:
+    week_start = monday_of_week_containing(current_date_for_user(user))
     lines: list[str] = []
     for activity in (Activity.HOME, Activity.BED):
         if lines:
@@ -335,7 +340,7 @@ def format_current_week_report(user_id: int) -> str:
                 activity,
                 week_start,
                 goal_time,
-                records_by_report_week(user_id, activity).get(week_start, []),
+                records_by_report_week(user.id, activity).get(week_start, []),
             )
         )
     return "\n".join(lines)
@@ -352,7 +357,7 @@ async def cmd_setgoal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not context.args or len(context.args) != 2:
         await update.message.reply_text(
             "Usage: /setgoal <bed|home> <HH:MM>\n"
-            "Sets your goal for the current week (Monday–Sunday, UTC date).",
+            "Sets your goal for the current week (Monday-Sunday, your timezone).",
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -364,8 +369,13 @@ async def cmd_setgoal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             reply_markup=main_menu_keyboard(),
         )
         return
-    tracking_service.set_goal(activity, time_value)
-    week = monday_of_week_containing(current_utc_datetime().date())
+    user = DddUser(update.effective_user.id) if update.effective_user else None
+    week = (
+        monday_of_week_containing(current_date_for_user(user))
+        if user is not None
+        else monday_of_week_containing(current_utc_datetime().date())
+    )
+    tracking_service.set_goal(activity, time_value, week_start=week)
     await update.message.reply_text(
         f"{activity_icon(activity)} Goal set for {activity_name(activity)} at {time_value.strftime('%H:%M')} "
         f"for {format_goal_week_label(week)}.",
@@ -379,7 +389,7 @@ async def cmd_getgoal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
     if not context.args or len(context.args) != 1:
         await update.message.reply_text(
-            "Usage: /getgoal <bed|home>\nShows the goal for the current week (UTC).",
+            "Usage: /getgoal <bed|home>\nShows the goal for the current week.",
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -387,7 +397,12 @@ async def cmd_getgoal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if activity is None:
         await update.message.reply_text("Unknown activity. Use `bed` or `home`.", reply_markup=main_menu_keyboard())
         return
-    week = monday_of_week_containing(current_utc_datetime().date())
+    user = DddUser(update.effective_user.id) if update.effective_user else None
+    week = (
+        monday_of_week_containing(current_date_for_user(user))
+        if user is not None
+        else monday_of_week_containing(current_utc_datetime().date())
+    )
     try:
         goal = tracking_service.get_goal(activity, week_start=week)
     except KeyError:
@@ -442,7 +457,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     if update.message:
         text = (
-            current_week_summary_text.summary_for_current_week(user.id)
+            current_week_summary_text.summary_for_current_week(DddUser(user.id))
             if user is not None
             else "Current week is not available."
         )
@@ -500,6 +515,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
     if not isinstance(kind, str) or not isinstance(activity, Activity) or user_id is None:
         clear_pending_action(context)
         return
+    user = DddUser(user_id)
 
     if kind == "event_yesterday":
         time_value = parse_hhmm(text)
@@ -509,22 +525,22 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
                 reply_markup=pending_reply_markup(kind),
             )
             return
-        day = current_utc_datetime().date() - datetime.timedelta(days=1)
+        day = current_date_for_user(user) - datetime.timedelta(days=1)
         ddd_activity = DddActivity[activity.name]
         result = record_activity.handle(
             RecordActivityForDayCommand(
-                user_id=user_id,
+                user=user,
                 activity=ddd_activity,
                 activity_date=day,
                 activity_time=time_value,
             )
         )
-        saved_ts = result.record.time.to_datetime()
+        saved_ts = result.record.time.to_datetime(user.time_zone)
         tracking_service.record(user_id, activity, saved_ts)
         clear_pending_action(context)
         await update.message.reply_text(
             week_details_text.details_for_week(
-                user_id=user_id,
+                user=user,
                 activity=ddd_activity,
                 date=result.record.time.date,
             ),
@@ -543,18 +559,18 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         ddd_activity = DddActivity[activity.name]
         result = record_activity.handle(
             RecordActivityForDayCommand(
-                user_id=user_id,
+                user=user,
                 activity=ddd_activity,
                 activity_date=timestamp.date(),
                 activity_time=timestamp.time(),
             )
         )
-        saved_ts = result.record.time.to_datetime()
+        saved_ts = result.record.time.to_datetime(user.time_zone)
         tracking_service.record(user_id, activity, saved_ts)
         clear_pending_action(context)
         await update.message.reply_text(
             week_details_text.details_for_week(
-                user_id=user_id,
+                user=user,
                 activity=ddd_activity,
                 date=result.record.time.date,
             ),
@@ -570,9 +586,9 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
                 reply_markup=pending_reply_markup(kind),
             )
             return
-        tracking_service.set_goal(activity, time_value)
+        week = monday_of_week_containing(current_date_for_user(user))
+        tracking_service.set_goal(activity, time_value, week_start=week)
         clear_pending_action(context)
-        week = monday_of_week_containing(current_utc_datetime().date())
         await update.message.reply_text(
             f"{activity_icon(activity)} Goal set for {activity_name(activity)} at {time_value.strftime('%H:%M')} "
             f"for {format_goal_week_label(week)}.",
@@ -635,6 +651,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if query is None or update.effective_user is None:
         return
     user_id = update.effective_user.id
+    user = DddUser(user_id)
     logger.info("PROCESS callback data=%r user_id=%s", query.data, user_id)
     await query.answer()
 
@@ -657,7 +674,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         reply_markup = past_menu_keyboard()
     elif query.data == "menu:goals":
         clear_pending_action(context)
-        text = monospace_message(format_current_week_report(user_id))
+        text = monospace_message(format_current_week_report(user))
         parse_mode = "HTML"
         reply_markup = goals_menu_keyboard()
     elif query.data.startswith("record_now:"):
@@ -671,15 +688,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             ddd_activity = DddActivity[activity.name]
             result = record_activity.handle(
                 RecordActivityNowCommand(
-                    user_id=user_id,
+                    user=user,
                     activity=ddd_activity,
                     occurred_at=occurred_at,
                 )
             )
-            saved_ts = result.record.time.to_datetime()
+            saved_ts = result.record.time.to_datetime(user.time_zone)
             tracking_service.record(user_id, activity, saved_ts)
             text = week_details_text.details_for_week(
-                user_id=user_id,
+                user=user,
                 activity=ddd_activity,
                 date=result.record.time.date,
             )
@@ -711,7 +728,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             text = "Unknown activity."
         else:
             set_pending_action(context, "goal_current", activity)
-            text = current_goal_summary(activity) + "\n\nSend the new goal time as HH:MM."
+            text = current_goal_summary(user, activity) + "\n\nSend the new goal time as HH:MM."
             reply_markup = pending_reply_markup("goal_current")
     elif query.data.startswith("goal_past:"):
         token = query.data.split(":", 1)[1]
