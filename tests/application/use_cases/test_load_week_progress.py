@@ -2,6 +2,8 @@ import datetime
 import unittest
 
 from application import (
+    LoadCurrentWeekGoalPreviewCommand,
+    LoadCurrentWeekGoalPreviewResult,
     LoadWeekProgressInRangeCommand,
     LoadWeekProgressInRangeResult,
     LoadWeekProgressCommand,
@@ -95,6 +97,100 @@ class LoadWeekProgressUseCaseTest(unittest.TestCase):
         )
 
         self.assertEqual(result, LoadWeekProgressResult(progress=None))
+
+    def test_current_week_goal_preview_returns_existing_current_progress(self) -> None:
+        goals = InMemoryWeekGoalRepository()
+        records = InMemoryRecordRepository()
+        use_case = LoadWeekProgressUseCase(goals, records)
+        current_goal = WeekGoal(
+            user_id=123,
+            activity=Activity.HOME,
+            week=WeekStart(datetime.date(2026, 5, 11)),
+            target_time=datetime.time(20, 0),
+        )
+        goals.save(
+            WeekGoal(
+                user_id=123,
+                activity=Activity.HOME,
+                week=WeekStart(datetime.date(2026, 5, 4)),
+                target_time=datetime.time(19, 55),
+            )
+        )
+        goals.save(current_goal)
+
+        result = use_case.handle(
+            LoadCurrentWeekGoalPreviewCommand(
+                user=User(123),
+                activity=Activity.HOME,
+                date=datetime.date(2026, 5, 14),
+            )
+        )
+
+        self.assertEqual(
+            result,
+            LoadCurrentWeekGoalPreviewResult(
+                progress=WeekProgress(goal=current_goal, records=()),
+                is_auto=False,
+            ),
+        )
+
+    def test_current_week_goal_preview_recommends_from_previous_week(self) -> None:
+        goals = InMemoryWeekGoalRepository()
+        records = InMemoryRecordRepository()
+        use_case = LoadWeekProgressUseCase(goals, records)
+        goals.save(
+            WeekGoal(
+                user_id=123,
+                activity=Activity.HOME,
+                week=WeekStart(datetime.date(2026, 5, 4)),
+                target_time=datetime.time(20, 0),
+            )
+        )
+        records.save(
+            Record(
+                user_id=123,
+                activity=Activity.HOME,
+                time=RecordTime(datetime.date(2026, 5, 5), datetime.time(19, 50)),
+            )
+        )
+        current_record = Record(
+            user_id=123,
+            activity=Activity.HOME,
+            time=RecordTime(datetime.date(2026, 5, 12), datetime.time(19, 40)),
+        )
+        records.save(current_record)
+
+        result = use_case.handle(
+            LoadCurrentWeekGoalPreviewCommand(
+                user=User(123),
+                activity=Activity.HOME,
+                date=datetime.date(2026, 5, 14),
+            )
+        )
+
+        self.assertEqual(result.is_auto, True)
+        self.assertEqual(result.progress.goal.week, WeekStart(datetime.date(2026, 5, 11)))
+        self.assertEqual(result.progress.goal.target_time, datetime.time(19, 55))
+        self.assertEqual(result.progress.records, (current_record,))
+
+    def test_current_week_goal_preview_without_previous_goal_returns_none(self) -> None:
+        use_case = LoadWeekProgressUseCase(
+            InMemoryWeekGoalRepository(),
+            InMemoryRecordRepository(),
+        )
+
+        result = use_case.handle(
+            LoadCurrentWeekGoalPreviewCommand(
+                user=User(123),
+                activity=Activity.BED,
+                date=datetime.date(2026, 5, 14),
+            )
+        )
+
+        self.assertEqual(
+            result,
+            LoadCurrentWeekGoalPreviewResult(progress=None, is_auto=False),
+        )
 
     def test_loads_progress_for_normalized_week_range_in_chronological_order(self) -> None:
         goals = InMemoryWeekGoalRepository()

@@ -1,4 +1,6 @@
 from application.use_cases.load_week_progress import (
+    LoadCurrentWeekGoalPreviewCommand,
+    LoadCurrentWeekGoalPreviewResult,
     LoadWeekProgressInRangeCommand,
     LoadWeekProgressInRangeResult,
     LoadWeekProgressCommand,
@@ -19,6 +21,8 @@ from application.use_cases.set_week_goal import (
 )
 
 __all__ = [
+    "LoadCurrentWeekGoalPreviewCommand",
+    "LoadCurrentWeekGoalPreviewResult",
     "LoadWeekProgressCommand",
     "LoadWeekProgressInRangeCommand",
     "LoadWeekProgressInRangeResult",

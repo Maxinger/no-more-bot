@@ -17,30 +17,30 @@ from telegram.ext import (
 )
 
 from application import (
+    LoadCurrentWeekGoalPreviewCommand,
     LoadWeekProgressUseCase,
     RecordActivityForDayCommand,
     RecordActivityNowCommand,
     RecordActivityUseCase,
+    SetWeekGoalCommand,
+    SetWeekGoalUseCase,
 )
-from domain.record import Activity
+from domain.record import Activity, WeekStart
 from domain.user import User
 from infra import InMemoryRepositories
 from infra.dev import apply_initial_data_fixture
 from representation import ActivityWeeksReportText, CurrentWeekSummaryText, WeekDetailsText
+from representation.formatting_utils import SEPARATOR
 
 logger = logging.getLogger(__name__)
 repositories = InMemoryRepositories()
 apply_initial_data_fixture(repositories)
-current_week_summary_text = CurrentWeekSummaryText(
-    LoadWeekProgressUseCase(repositories.goals, repositories.records)
-)
-week_details_text = WeekDetailsText(
-    LoadWeekProgressUseCase(repositories.goals, repositories.records)
-)
-activity_weeks_report_text = ActivityWeeksReportText(
-    LoadWeekProgressUseCase(repositories.goals, repositories.records)
-)
+load_week_progress = LoadWeekProgressUseCase(repositories.goals, repositories.records)
+current_week_summary_text = CurrentWeekSummaryText(load_week_progress)
+week_details_text = WeekDetailsText(load_week_progress)
+activity_weeks_report_text = ActivityWeeksReportText(load_week_progress)
 record_activity = RecordActivityUseCase(repositories.records)
+set_week_goal = SetWeekGoalUseCase(repositories.goals)
 
 USER_DATA_PENDING_ACTION = "pending_action"
 HOME_ICON = "🏠"
@@ -99,7 +99,30 @@ def past_menu_keyboard() -> InlineKeyboardMarkup:
 
 
 def goals_menu_keyboard() -> InlineKeyboardMarkup:
-    return back_to_menu_keyboard()
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(f"{HOME_ICON} Set", callback_data="goal_set:home"),
+                InlineKeyboardButton(f"{BED_ICON} Set", callback_data="goal_set:bed"),
+            ],
+            back_to_menu_row(),
+        ]
+    )
+
+
+def goal_set_keyboard(activity: Activity, *, has_auto: bool) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if has_auto:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    "Auto",
+                    callback_data=f"goal_auto:{activity_token(activity)}",
+                )
+            ]
+        )
+    rows.append(back_to_menu_row())
+    return InlineKeyboardMarkup(rows)
 
 
 def parse_activity_token(token: str) -> Activity | None:
@@ -109,6 +132,10 @@ def parse_activity_token(token: str) -> Activity | None:
     if t in ("home", "going_home"):
         return Activity.HOME
     return None
+
+
+def activity_token(activity: Activity) -> str:
+    return "home" if activity == Activity.HOME else "bed"
 
 
 def parse_hhmm(s: str) -> datetime.time | None:
@@ -141,19 +168,49 @@ def current_date_for_user(user: User) -> datetime.date:
     return current_utc_datetime().astimezone(user.time_zone).date()
 
 
+def current_week_for_user(user: User) -> WeekStart:
+    return WeekStart.from_any_date(current_date_for_user(user))
+
+
 def activity_name(activity: Activity) -> str:
     return "Home" if activity == Activity.HOME else "Bed"
 
 
 def goals_report_for_current_week(user: User) -> str:
     current_date = current_date_for_user(user)
-    return "\n\n".join(
+    return f"\n{SEPARATOR}\n".join(
         activity_weeks_report_text.report_for_activity(
             user=user,
             activity=activity,
             date=current_date,
         )
         for activity in (Activity.HOME, Activity.BED)
+    )
+
+
+def goal_set_screen_for_current_week(
+    user: User, activity: Activity
+) -> tuple[str, InlineKeyboardMarkup]:
+    current_date = current_date_for_user(user)
+    preview = load_week_progress.handle(
+        LoadCurrentWeekGoalPreviewCommand(
+            user=user,
+            activity=activity,
+            date=current_date,
+        )
+    )
+    text = week_details_text.details_for_week(
+        user=user,
+        activity=activity,
+        date=current_date,
+        auto_progress=preview.progress if preview.is_auto else None,
+    )
+    instructions = [f"Send HH:MM to save a {activity_name(activity)} goal."]
+    if preview.is_auto and preview.progress is not None:
+        instructions.insert(0, "Tap Auto to save the recommended goal.")
+    return (
+        f"{text}\n\n" + "\n".join(instructions),
+        goal_set_keyboard(activity, has_auto=preview.is_auto and preview.progress is not None),
     )
 
 
@@ -303,6 +360,33 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         )
         return
 
+    if kind == "goal_manual":
+        target_time = parse_hhmm(text)
+        if target_time is None:
+            await update.message.reply_text(
+                "Expected HH:MM, for example 22:30. Send /start to cancel.",
+                reply_markup=pending_reply_markup(kind),
+            )
+            return
+        set_week_goal.handle(
+            SetWeekGoalCommand(
+                user=user,
+                activity=activity,
+                week=current_week_for_user(user),
+                target_time=target_time,
+            )
+        )
+        clear_pending_action(context)
+        await update.message.reply_text(
+            week_details_text.details_for_week(
+                user=user,
+                activity=activity,
+                date=current_date_for_user(user),
+            ),
+            reply_markup=back_to_menu_keyboard(),
+        )
+        return
+
     clear_pending_action(context)
 
 
@@ -336,6 +420,46 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         clear_pending_action(context)
         text = goals_report_for_current_week(user)
         reply_markup = goals_menu_keyboard()
+    elif query.data.startswith("goal_set:"):
+        token = query.data.split(":", 1)[1]
+        activity = parse_activity_token(token)
+        if activity is None:
+            text = "Unknown activity."
+        else:
+            set_pending_action(context, "goal_manual", activity)
+            text, reply_markup = goal_set_screen_for_current_week(user, activity)
+    elif query.data.startswith("goal_auto:"):
+        token = query.data.split(":", 1)[1]
+        activity = parse_activity_token(token)
+        if activity is None:
+            text = "Unknown activity."
+        else:
+            preview = load_week_progress.handle(
+                LoadCurrentWeekGoalPreviewCommand(
+                    user=user,
+                    activity=activity,
+                    date=current_date_for_user(user),
+                )
+            )
+            if preview.is_auto and preview.progress is not None:
+                set_week_goal.handle(
+                    SetWeekGoalCommand(
+                        user=user,
+                        activity=activity,
+                        week=preview.progress.goal.week,
+                        target_time=preview.progress.goal.target_time,
+                    )
+                )
+                clear_pending_action(context)
+                text = week_details_text.details_for_week(
+                    user=user,
+                    activity=activity,
+                    date=current_date_for_user(user),
+                )
+                reply_markup = back_to_menu_keyboard()
+            else:
+                set_pending_action(context, "goal_manual", activity)
+                text, reply_markup = goal_set_screen_for_current_week(user, activity)
     elif query.data.startswith("record_now:"):
         clear_pending_action(context)
         token = query.data.split(":", 1)[1]

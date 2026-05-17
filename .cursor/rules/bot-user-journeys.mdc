@@ -1,0 +1,24 @@
+---
+description: Reference the bot's numbered user journeys
+alwaysApply: false
+---
+
+# Bot User Journeys
+
+Use these numbers when discussing or changing bot behavior. Buttons are denoted in square brackets. `[Back to Menu]` should be available as a wide bottom-row button from every non-main-menu screen and should return to the current week summary with main menu buttons.
+
+1. `/start` -> Output current week summary -> Show main menu
+2. `[🏠 Now]` -> Insert new home record now -> Output home week progress
+3. `[🛏️ Now]` -> Insert new bed record now -> Output bed week progress
+4. `[⏰ Past]` -> `[🏠 Yesterday]` -> Enter `HH:MM` -> Insert home record for yesterday -> Output yesterday's home week progress
+5. `[⏰ Past]` -> `[🛏️ Yesterday]` -> Enter `HH:MM` -> Insert bed record for yesterday -> Output yesterday's bed week progress
+6. `[⏰ Past]` -> `[🏠 Earlier]` -> Enter `dd.mm.yyyy HH:MM` or `dd.mm HH:MM` -> Insert home record for that date -> Output that week's home progress
+7. `[⏰ Past]` -> `[🛏️ Earlier]` -> Enter `dd.mm.yyyy HH:MM` or `dd.mm HH:MM` -> Insert bed record for that date -> Output that week's bed progress
+8. `[🎯 Goals]` -> Output home and bed last-weeks reports separated by `===============` -> Show `[🏠 Set]`, `[🛏️ Set]`, and `[Back to Menu]`
+9. `[🎯 Goals]` -> `[🏠 Set]` -> Output current home week progress; if current goal is missing and previous week exists, show recommended `Goal: HH:MM (auto)` without saving -> Show `[Auto]` when available and `[Back to Menu]`
+10. `[🎯 Goals]` -> `[🛏️ Set]` -> Output current bed week progress; if current goal is missing and previous week exists, show recommended `Goal: HH:MM (auto)` without saving -> Show `[Auto]` when available and `[Back to Menu]`
+11. `[🎯 Goals]` -> `[🏠 Set]` -> `[Auto]` -> Save recommended home goal -> Output current home week progress
+12. `[🎯 Goals]` -> `[🛏️ Set]` -> `[Auto]` -> Save recommended bed goal -> Output current bed week progress
+13. `[🎯 Goals]` -> `[🏠 Set]` -> Enter `HH:MM` -> Save current home week goal -> Output current home week progress
+14. `[🎯 Goals]` -> `[🛏️ Set]` -> Enter `HH:MM` -> Save current bed week goal -> Output current bed week progress
+15. `[Back to Menu]` from any non-main-menu screen -> Output current week summary -> Show main menu

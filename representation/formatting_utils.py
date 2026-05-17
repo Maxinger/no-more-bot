@@ -2,6 +2,8 @@
 
 from datetime import date, time
 
+SEPARATOR = "==============="
+
 
 def format_date(value: date) -> str:
     """Format date in 24-hour format."""

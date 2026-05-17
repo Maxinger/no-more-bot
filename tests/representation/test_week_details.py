@@ -2,7 +2,7 @@ import datetime
 import unittest
 
 from application import LoadWeekProgressUseCase
-from domain import Activity, Record, RecordTime, User, WeekGoal, WeekStart
+from domain import Activity, Record, RecordTime, User, WeekGoal, WeekProgress, WeekStart
 from infra.repositories import InMemoryRepositories
 from representation import WeekDetailsText
 
@@ -78,6 +78,40 @@ class WeekDetailsTextTest(unittest.TestCase):
                     "🛏️ Week progress (11.05.2026)",
                     "",
                     "Goal: not set",
+                    "===============",
+                ]
+            ),
+        )
+
+    def test_details_can_show_unsaved_auto_progress_for_missing_goal(self) -> None:
+        repositories = InMemoryRepositories()
+        details = WeekDetailsText(
+            LoadWeekProgressUseCase(repositories.goals, repositories.records)
+        )
+        auto_progress = WeekProgress(
+            goal=WeekGoal(
+                user_id=123,
+                activity=Activity.BED,
+                week=WeekStart(datetime.date(2026, 5, 11)),
+                target_time=datetime.time(22, 25),
+            ),
+            records=(),
+        )
+
+        text = details.details_for_week(
+            user=User(123),
+            activity=Activity.BED,
+            date=datetime.date(2026, 5, 16),
+            auto_progress=auto_progress,
+        )
+
+        self.assertEqual(
+            text,
+            "\n".join(
+                [
+                    "🛏️ Week progress (11.05.2026)",
+                    "",
+                    "Goal: 22:25 (auto) ⚪ +0",
                     "===============",
                 ]
             ),

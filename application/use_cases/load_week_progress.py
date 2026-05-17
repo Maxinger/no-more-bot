@@ -25,6 +25,19 @@ class LoadWeekProgressResult:
 
 
 @dataclass(frozen=True)
+class LoadCurrentWeekGoalPreviewCommand:
+    user: User
+    activity: Activity
+    date: date
+
+
+@dataclass(frozen=True)
+class LoadCurrentWeekGoalPreviewResult:
+    progress: WeekProgress | None
+    is_auto: bool
+
+
+@dataclass(frozen=True)
 class WeekProgressInRangeEntry:
     week: WeekStart
     progress: WeekProgress | None
@@ -55,6 +68,32 @@ class LoadWeekProgressUseCase(UseCase):
         week = WeekStart.from_any_date(command.date)
         return LoadWeekProgressResult(
             progress=self._load_progress(command.user, command.activity, week)
+        )
+
+    @handles(LoadCurrentWeekGoalPreviewCommand)
+    def _load_current_week_goal_preview(
+        self, command: LoadCurrentWeekGoalPreviewCommand
+    ) -> LoadCurrentWeekGoalPreviewResult:
+        week = WeekStart.from_any_date(command.date)
+        current_progress = self._load_progress(command.user, command.activity, week)
+        if current_progress is not None:
+            return LoadCurrentWeekGoalPreviewResult(
+                progress=current_progress,
+                is_auto=False,
+            )
+
+        previous_week = WeekStart(week.value - timedelta(days=7))
+        previous_progress = self._load_progress(
+            command.user, command.activity, previous_week
+        )
+        if previous_progress is None:
+            return LoadCurrentWeekGoalPreviewResult(progress=None, is_auto=False)
+
+        recommended_goal = previous_progress.next_week_goal()
+        records = self._records.find_for_week(command.user.id, command.activity, week)
+        return LoadCurrentWeekGoalPreviewResult(
+            progress=WeekProgress(goal=recommended_goal, records=records),
+            is_auto=True,
         )
 
     @handles(LoadWeekProgressInRangeCommand)
