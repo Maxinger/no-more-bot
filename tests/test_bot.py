@@ -254,25 +254,28 @@ class BotHelpersTest(unittest.TestCase):
         )
         self.assertNotIn("20.04.2026", report)
 
-    def test_pending_reply_markup_contains_cancel_button(self) -> None:
+    def test_pending_reply_markup_contains_back_to_menu_button(self) -> None:
         markup = bot.pending_reply_markup("goal_current")
 
-        self.assertEqual(markup.inline_keyboard[0][0].text, "Cancel")
+        self.assertEqual(len(markup.inline_keyboard[0]), 1)
+        self.assertEqual(markup.inline_keyboard[0][0].text, "Back to Menu")
         self.assertEqual(markup.inline_keyboard[0][0].callback_data, "menu:main")
 
-    def test_past_menu_contains_cancel_button(self) -> None:
+    def test_past_menu_contains_wide_back_to_menu_button(self) -> None:
         markup = bot.past_menu_keyboard()
 
-        cancel_button = markup.inline_keyboard[-1][0]
-        self.assertEqual(cancel_button.text, "Cancel")
-        self.assertEqual(cancel_button.callback_data, "menu:main")
+        back_row = markup.inline_keyboard[-1]
+        self.assertEqual(len(back_row), 1)
+        self.assertEqual(back_row[0].text, "Back to Menu")
+        self.assertEqual(back_row[0].callback_data, "menu:main")
 
-    def test_goals_menu_contains_cancel_button(self) -> None:
+    def test_goals_menu_contains_wide_back_to_menu_button(self) -> None:
         markup = bot.goals_menu_keyboard()
 
-        cancel_button = markup.inline_keyboard[-1][0]
-        self.assertEqual(cancel_button.text, "Cancel")
-        self.assertEqual(cancel_button.callback_data, "menu:main")
+        back_row = markup.inline_keyboard[-1]
+        self.assertEqual(len(back_row), 1)
+        self.assertEqual(back_row[0].text, "Back to Menu")
+        self.assertEqual(back_row[0].callback_data, "menu:main")
 
 
 class FakeMessage:
@@ -492,6 +495,26 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
 
 
 class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_back_to_menu_replies_with_current_week_summary(self) -> None:
+        original_summary_text = bot.current_week_summary_text
+        bot.current_week_summary_text = FakeCurrentWeekSummaryText()
+        query = FakeCallbackQuery("menu:main")
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            callback_query=query,
+        )
+        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "goal_current"}})
+
+        try:
+            await bot.button_callback(update, context)
+        finally:
+            bot.current_week_summary_text = original_summary_text
+
+        self.assertEqual(query.answers, 1)
+        self.assertEqual(query.edits[0]["text"], "Current week summary for 123")
+        self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
+        self.assertIsNotNone(query.edits[0]["reply_markup"])
+
     async def test_record_now_uses_minsk_timezone_near_utc_midnight(self) -> None:
         original_record_activity = bot.record_activity
         original_week_details_text = bot.week_details_text

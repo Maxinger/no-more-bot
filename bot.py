@@ -52,6 +52,7 @@ BED_ICON = "🛏️"
 TIME_ICON = "⏰"
 CALENDAR_ICON = "📅"
 GOALS_ICON = "🎯"
+BACK_TO_MENU_LABEL = "Back to Menu"
 
 WELCOME = (
     "NoMoreBot — track activities and weekly goals.\n\n"
@@ -77,6 +78,14 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def back_to_menu_row() -> list[InlineKeyboardButton]:
+    return [InlineKeyboardButton(BACK_TO_MENU_LABEL, callback_data="menu:main")]
+
+
+def back_to_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([back_to_menu_row()])
+
+
 def past_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
@@ -88,7 +97,7 @@ def past_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(f"{HOME_ICON} Earlier", callback_data="past_date:home"),
                 InlineKeyboardButton(f"{BED_ICON} Earlier", callback_data="past_date:bed"),
             ],
-            [InlineKeyboardButton("Cancel", callback_data="menu:main")],
+            back_to_menu_row(),
         ]
     )
 
@@ -108,7 +117,7 @@ def goals_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(f"{HOME_ICON} Report", callback_data="goal_report:home"),
                 InlineKeyboardButton(f"{BED_ICON} Report", callback_data="goal_report:bed"),
             ],
-            [InlineKeyboardButton("Cancel", callback_data="menu:main")],
+            back_to_menu_row(),
         ]
     )
 
@@ -202,7 +211,7 @@ def set_pending_action(
 
 
 def pending_reply_markup(kind: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Cancel", callback_data="menu:main")]])
+    return back_to_menu_keyboard()
 
 
 def build_activity_timestamp(
@@ -358,7 +367,7 @@ async def cmd_setgoal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text(
             "Usage: /setgoal <bed|home> <HH:MM>\n"
             "Sets your goal for the current week (Monday-Sunday, your timezone).",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=back_to_menu_keyboard(),
         )
         return
     activity = parse_activity_token(context.args[0])
@@ -366,7 +375,7 @@ async def cmd_setgoal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if activity is None or time_value is None:
         await update.message.reply_text(
             "Could not parse activity or time. Use e.g. /setgoal bed 22:30",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=back_to_menu_keyboard(),
         )
         return
     user = DddUser(update.effective_user.id) if update.effective_user else None
@@ -379,7 +388,7 @@ async def cmd_setgoal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_text(
         f"{activity_icon(activity)} Goal set for {activity_name(activity)} at {time_value.strftime('%H:%M')} "
         f"for {format_goal_week_label(week)}.",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=back_to_menu_keyboard(),
     )
 
 
@@ -390,12 +399,12 @@ async def cmd_getgoal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not context.args or len(context.args) != 1:
         await update.message.reply_text(
             "Usage: /getgoal <bed|home>\nShows the goal for the current week.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=back_to_menu_keyboard(),
         )
         return
     activity = parse_activity_token(context.args[0])
     if activity is None:
-        await update.message.reply_text("Unknown activity. Use `bed` or `home`.", reply_markup=main_menu_keyboard())
+        await update.message.reply_text("Unknown activity. Use `bed` or `home`.", reply_markup=back_to_menu_keyboard())
         return
     user = DddUser(update.effective_user.id) if update.effective_user else None
     week = (
@@ -408,13 +417,13 @@ async def cmd_getgoal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except KeyError:
         await update.message.reply_text(
             f"No goal set for {activity_name(activity)} for {format_goal_week_label(week)}.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=back_to_menu_keyboard(),
         )
         return
     await update.message.reply_text(
         f"{activity_icon(activity)} {activity_name(activity)}: {goal.strftime('%H:%M')} "
         f"({format_goal_week_label(week)})",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=back_to_menu_keyboard(),
     )
 
 
@@ -425,12 +434,12 @@ async def cmd_goals(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args or len(context.args) < 1:
         await update.message.reply_text(
             "Usage: /goals <bed|home> [limit]\nLists recent goals (default limit 10).",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=back_to_menu_keyboard(),
         )
         return
     activity = parse_activity_token(context.args[0])
     if activity is None:
-        await update.message.reply_text("Unknown activity. Use `bed` or `home`.", reply_markup=main_menu_keyboard())
+        await update.message.reply_text("Unknown activity. Use `bed` or `home`.", reply_markup=back_to_menu_keyboard())
         return
     limit = 10
     if len(context.args) >= 2:
@@ -439,11 +448,11 @@ async def cmd_goals(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         except ValueError:
             await update.message.reply_text(
                 "Limit must be a number between 1 and 50.",
-                reply_markup=main_menu_keyboard(),
+                reply_markup=back_to_menu_keyboard(),
             )
             return
     pairs = tracking_service.get_goals(activity, limit=limit)
-    await update.message.reply_text(format_goals_list(pairs), reply_markup=main_menu_keyboard())
+    await update.message.reply_text(format_goals_list(pairs), reply_markup=back_to_menu_keyboard())
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -544,7 +553,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
                 activity=ddd_activity,
                 date=result.record.time.date,
             ),
-            reply_markup=main_menu_keyboard(),
+            reply_markup=back_to_menu_keyboard(),
         )
         return
 
@@ -574,7 +583,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
                 activity=ddd_activity,
                 date=result.record.time.date,
             ),
-            reply_markup=main_menu_keyboard(),
+            reply_markup=back_to_menu_keyboard(),
         )
         return
 
@@ -592,7 +601,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text(
             f"{activity_icon(activity)} Goal set for {activity_name(activity)} at {time_value.strftime('%H:%M')} "
             f"for {format_goal_week_label(week)}.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=back_to_menu_keyboard(),
         )
         return
 
@@ -631,7 +640,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
             clear_pending_action(context)
             await update.message.reply_text(
                 "Could not determine the target week. Please try again from Goals.",
-                reply_markup=main_menu_keyboard(),
+                reply_markup=back_to_menu_keyboard(),
             )
             return
         tracking_service.set_goal(activity, time_value, week_start=week_start)
@@ -639,7 +648,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text(
             f"{activity_icon(activity)} Goal set for {activity_name(activity)} at {time_value.strftime('%H:%M')} "
             f"for {format_goal_week_label(week_start)}.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=back_to_menu_keyboard(),
         )
         return
 
@@ -656,12 +665,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.answer()
 
     text: str
-    reply_markup = main_menu_keyboard()
+    reply_markup = back_to_menu_keyboard()
     parse_mode: str | None = None
 
     if query.data == "menu:main":
         clear_pending_action(context)
-        text = WELCOME
+        text = current_week_summary_text.summary_for_current_week(user)
         reply_markup = main_menu_keyboard()
     elif query.data == "menu:past":
         clear_pending_action(context)
@@ -669,7 +678,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             "Choose a past event flow.\n\n"
             f"• {HOME_ICON} Yesterday / {BED_ICON} Yesterday expects HH:MM\n"
             f"• {CALENDAR_ICON} Date expects `dd.mm.yyyy HH:MM` or `dd.mm HH:MM`\n\n"
-            "Tap Cancel or send /start to return to the main menu."
+            f"Tap {BACK_TO_MENU_LABEL} or send /start to return to the main menu."
         )
         reply_markup = past_menu_keyboard()
     elif query.data == "menu:goals":
@@ -700,6 +709,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 activity=ddd_activity,
                 date=result.record.time.date,
             )
+            reply_markup = back_to_menu_keyboard()
     elif query.data.startswith("past_yesterday:"):
         token = query.data.split(":", 1)[1]
         activity = parse_activity_token(token)
