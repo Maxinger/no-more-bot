@@ -77,7 +77,7 @@ class BotHelpersTest(unittest.TestCase):
         self.assertEqual(back_row[0].text, "Back to Menu")
         self.assertEqual(back_row[0].callback_data, "menu:main")
 
-    def test_goals_menu_is_placeholder_with_back_to_menu_button(self) -> None:
+    def test_goals_menu_contains_back_to_menu_button(self) -> None:
         markup = bot.goals_menu_keyboard()
 
         self.assertEqual(len(markup.inline_keyboard), 1)
@@ -131,6 +131,15 @@ class FakeWeekDetailsText:
     def details_for_week(self, user, activity, date):
         self.calls.append((user.id, activity, date))
         return f"Week details for {activity.value} on {date.isoformat()}"
+
+
+class FakeActivityWeeksReportText:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def report_for_activity(self, user, activity, date):
+        self.calls.append((user.id, activity, date))
+        return f"Activity weeks report for {activity.value} on {date.isoformat()}"
 
 
 class FakeCallbackQuery:
@@ -308,7 +317,10 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertIsNotNone(query.edits[0]["reply_markup"])
 
-    async def test_goals_button_shows_placeholder_with_back_to_menu(self) -> None:
+    async def test_goals_button_shows_activity_reports_with_back_to_menu(self) -> None:
+        original_activity_weeks_report_text = bot.activity_weeks_report_text
+        fake_activity_weeks_report_text = FakeActivityWeeksReportText()
+        bot.activity_weeks_report_text = fake_activity_weeks_report_text
         query = FakeCallbackQuery("menu:goals")
         update = types.SimpleNamespace(
             effective_user=types.SimpleNamespace(id=123),
@@ -316,10 +328,32 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
         )
         context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_date"}})
 
-        await bot.button_callback(update, context)
+        try:
+            with patch("bot.current_utc_datetime") as mock_now:
+                mock_now.return_value = datetime.datetime(
+                    2026, 5, 17, 9, 0, tzinfo=datetime.timezone.utc
+                )
+                await bot.button_callback(update, context)
+        finally:
+            bot.activity_weeks_report_text = original_activity_weeks_report_text
 
         self.assertEqual(query.answers, 1)
-        self.assertIn("Goals are temporarily unavailable", query.edits[0]["text"])
+        self.assertEqual(
+            query.edits[0]["text"],
+            "\n\n".join(
+                [
+                    "Activity weeks report for going_home on 2026-05-17",
+                    "Activity weeks report for going_to_bed on 2026-05-17",
+                ]
+            ),
+        )
+        self.assertEqual(
+            fake_activity_weeks_report_text.calls,
+            [
+                (123, bot.Activity.HOME, datetime.date(2026, 5, 17)),
+                (123, bot.Activity.BED, datetime.date(2026, 5, 17)),
+            ],
+        )
         self.assertIsNone(query.edits[0]["parse_mode"])
         self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][0].callback_data, "menu:main")
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)

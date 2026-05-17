@@ -1,7 +1,10 @@
 from application.use_cases.load_week_progress import (
+    LoadWeekProgressInRangeCommand,
+    LoadWeekProgressInRangeResult,
     LoadWeekProgressCommand,
     LoadWeekProgressResult,
     LoadWeekProgressUseCase,
+    WeekProgressInRangeEntry,
 )
 from application.use_cases.record_activity import (
     RecordActivityForDayCommand,
@@ -17,6 +20,8 @@ from application.use_cases.set_week_goal import (
 
 __all__ = [
     "LoadWeekProgressCommand",
+    "LoadWeekProgressInRangeCommand",
+    "LoadWeekProgressInRangeResult",
     "LoadWeekProgressResult",
     "LoadWeekProgressUseCase",
     "RecordActivityForDayCommand",
@@ -26,4 +31,5 @@ __all__ = [
     "SetWeekGoalCommand",
     "SetWeekGoalResult",
     "SetWeekGoalUseCase",
+    "WeekProgressInRangeEntry",
 ]

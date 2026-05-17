@@ -26,7 +26,7 @@ from domain.record import Activity
 from domain.user import User
 from infra import InMemoryRepositories
 from infra.dev import apply_initial_data_fixture
-from representation import CurrentWeekSummaryText, WeekDetailsText
+from representation import ActivityWeeksReportText, CurrentWeekSummaryText, WeekDetailsText
 
 logger = logging.getLogger(__name__)
 repositories = InMemoryRepositories()
@@ -35,6 +35,9 @@ current_week_summary_text = CurrentWeekSummaryText(
     LoadWeekProgressUseCase(repositories.goals, repositories.records)
 )
 week_details_text = WeekDetailsText(
+    LoadWeekProgressUseCase(repositories.goals, repositories.records)
+)
+activity_weeks_report_text = ActivityWeeksReportText(
     LoadWeekProgressUseCase(repositories.goals, repositories.records)
 )
 record_activity = RecordActivityUseCase(repositories.records)
@@ -51,7 +54,7 @@ WELCOME = (
     "NoMoreBot — track activities.\n\n"
     f"{HOME_ICON} Now and {BED_ICON} Now record an event immediately.\n"
     f"{TIME_ICON} Past lets you save yesterday or a specific date.\n"
-    f"{GOALS_ICON} Goals is reserved for a future goals workflow.\n\n"
+    f"{GOALS_ICON} Goals shows the last 3 weeks.\n\n"
     "Send /start anytime to return to the main menu."
 )
 
@@ -140,6 +143,18 @@ def current_date_for_user(user: User) -> datetime.date:
 
 def activity_name(activity: Activity) -> str:
     return "Home" if activity == Activity.HOME else "Bed"
+
+
+def goals_report_for_current_week(user: User) -> str:
+    current_date = current_date_for_user(user)
+    return "\n\n".join(
+        activity_weeks_report_text.report_for_activity(
+            user=user,
+            activity=activity,
+            date=current_date,
+        )
+        for activity in (Activity.HOME, Activity.BED)
+    )
 
 
 def clear_pending_action(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -319,7 +334,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         reply_markup = past_menu_keyboard()
     elif query.data == "menu:goals":
         clear_pending_action(context)
-        text = "Goals are temporarily unavailable while the new goals workflow is being built."
+        text = goals_report_for_current_week(user)
         reply_markup = goals_menu_keyboard()
     elif query.data.startswith("record_now:"):
         clear_pending_action(context)
