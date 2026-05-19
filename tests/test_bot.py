@@ -1,4 +1,5 @@
 import datetime
+import json
 import sys
 import types
 import unittest
@@ -22,6 +23,12 @@ class InlineKeyboardMarkup:
         self.inline_keyboard = inline_keyboard
 
 
+class InputFile:
+    def __init__(self, file_obj, filename: str | None = None):
+        self.file_obj = file_obj
+        self.filename = filename
+
+
 class BotCommand:
     def __init__(self, command: str, description: str):
         self.command = command
@@ -35,6 +42,7 @@ class Update:
 telegram_module.BotCommand = BotCommand
 telegram_module.InlineKeyboardButton = InlineKeyboardButton
 telegram_module.InlineKeyboardMarkup = InlineKeyboardMarkup
+telegram_module.InputFile = InputFile
 telegram_module.Update = Update
 sys.modules.setdefault("telegram", telegram_module)
 
@@ -62,6 +70,15 @@ from domain import Record, RecordTime, WeekGoal, WeekProgress, WeekStart
 
 
 class BotHelpersTest(unittest.TestCase):
+    def test_main_menu_contains_export_button(self) -> None:
+        markup = bot.main_menu_keyboard()
+
+        self.assertEqual(len(markup.inline_keyboard), 3)
+        export_row = markup.inline_keyboard[2]
+        self.assertEqual(len(export_row), 1)
+        self.assertEqual(export_row[0].text, "Export")
+        self.assertEqual(export_row[0].callback_data, "export:data")
+
     def test_pending_reply_markup_contains_back_to_menu_button(self) -> None:
         markup = bot.pending_reply_markup("event_yesterday")
 
@@ -185,8 +202,9 @@ def make_progress(
 
 
 class FakeCallbackQuery:
-    def __init__(self, data: str) -> None:
+    def __init__(self, data: str, *, chat_id: int = 456) -> None:
         self.data = data
+        self.message = types.SimpleNamespace(chat_id=chat_id)
         self.answers = 0
         self.edits = []
 
@@ -201,6 +219,35 @@ class FakeCallbackQuery:
                 "parse_mode": parse_mode,
             }
         )
+
+
+class FakeBot:
+    def __init__(self) -> None:
+        self.documents = []
+
+    async def send_document(self, chat_id, document, caption=None):
+        self.documents.append(
+            {
+                "chat_id": chat_id,
+                "document": document,
+                "caption": caption,
+            }
+        )
+
+
+class FakeExportUserData:
+    def __init__(self, user_id: int) -> None:
+        self.user_id = user_id
+        self.commands = []
+
+    def handle(self, command):
+        self.commands.append(command)
+        return types.SimpleNamespace(user_id=command.user.id, weeks=())
+
+
+class FakeInitialDataJsonBytes:
+    def serialize(self, result) -> bytes:
+        return json.dumps({"user_id": result.user_id, "weeks": []}).encode("utf-8")
 
 
 class StartHandlerTest(unittest.IsolatedAsyncioTestCase):
@@ -583,6 +630,51 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertEqual(query.edits[0]["text"], "Week details for going_to_bed on 2026-05-14")
         self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][0].callback_data, "menu:main")
+
+    async def test_export_button_sends_document_and_shows_confirmation(self) -> None:
+        original_export_user_data = bot.export_user_data
+        original_initial_data_json_bytes = bot.initial_data_json_bytes
+        fake_export = FakeExportUserData(123)
+        fake_serializer = FakeInitialDataJsonBytes()
+        bot.export_user_data = fake_export
+        bot.initial_data_json_bytes = fake_serializer
+        fake_bot = FakeBot()
+        query = FakeCallbackQuery("export:data", chat_id=789)
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            callback_query=query,
+        )
+        context = types.SimpleNamespace(
+            user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "goal_manual"}},
+            bot=fake_bot,
+        )
+
+        try:
+            with patch("bot.current_utc_datetime") as mock_now:
+                mock_now.return_value = datetime.datetime(
+                    2026, 5, 19, 9, 0, tzinfo=datetime.timezone.utc
+                )
+                await bot.button_callback(update, context)
+        finally:
+            bot.export_user_data = original_export_user_data
+            bot.initial_data_json_bytes = original_initial_data_json_bytes
+
+        self.assertEqual(query.answers, 1)
+        self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
+        self.assertEqual(len(fake_export.commands), 1)
+        self.assertEqual(fake_export.commands[0].user.id, 123)
+        self.assertEqual(len(fake_bot.documents), 1)
+        self.assertEqual(fake_bot.documents[0]["chat_id"], 789)
+        self.assertEqual(fake_bot.documents[0]["caption"], "Your data export")
+        self.assertEqual(
+            fake_bot.documents[0]["document"].filename,
+            "nomorebot-export-123-20260519.json",
+        )
+        self.assertEqual(query.edits[0]["text"], "Export sent. Check the file above.")
+        self.assertEqual(
+            query.edits[0]["reply_markup"].inline_keyboard[2][0].callback_data,
+            "export:data",
+        )
 
     async def test_record_now_uses_minsk_timezone_near_utc_midnight(self) -> None:
         original_record_activity = bot.record_activity

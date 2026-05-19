@@ -38,6 +38,16 @@ class InMemoryRecordRepository(RecordRepository):
             and start <= logical_day <= end
         )
 
+    def find_all_for_user(self, user_id: int) -> tuple[Record, ...]:
+        return tuple(
+            record
+            for (record_user_id, record_activity, logical_day), record in sorted(
+                self._by_key.items(),
+                key=lambda item: (item[0][2], item[0][1].value),
+            )
+            if record_user_id == user_id
+        )
+
     def save(self, record: Record) -> None:
         self._by_key[(record.user_id, record.activity, record.time.date)] = record
 
@@ -50,6 +60,16 @@ class InMemoryWeekGoalRepository(WeekGoalRepository):
 
     def find(self, user_id: int, activity: Activity, week: WeekStart) -> WeekGoal | None:
         return self._by_key.get((user_id, activity, week.value))
+
+    def find_all_for_user(self, user_id: int) -> tuple[WeekGoal, ...]:
+        return tuple(
+            goal
+            for (goal_user_id, goal_activity, week_start), goal in sorted(
+                self._by_key.items(),
+                key=lambda item: (item[0][2], item[0][1].value),
+            )
+            if goal_user_id == user_id
+        )
 
     def save(self, goal: WeekGoal) -> None:
         self._by_key[(goal.user_id, goal.activity, goal.week.value)] = goal

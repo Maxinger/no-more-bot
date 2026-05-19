@@ -22,6 +22,10 @@ class RecordRepository(Protocol):
         """Return records whose logical days fall within ``week`` Monday through Sunday."""
         raise NotImplementedError
 
+    def find_all_for_user(self, user_id: int) -> tuple[Record, ...]:
+        """Return all records for ``user_id``, sorted by logical day then activity."""
+        raise NotImplementedError
+
     def save(self, record: Record) -> None:
         """Persist ``record``, replacing any existing row for the same user, activity, and logical day."""
         raise NotImplementedError

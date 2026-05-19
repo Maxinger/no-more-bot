@@ -12,6 +12,10 @@ class WeekGoalRepository(Protocol):
     def find(self, user_id: int, activity: Activity, week: WeekStart) -> WeekGoal | None:
         raise NotImplementedError
 
+    def find_all_for_user(self, user_id: int) -> tuple[WeekGoal, ...]:
+        """Return all goals for ``user_id``, sorted by week start then activity."""
+        raise NotImplementedError
+
     def save(self, goal: WeekGoal) -> None:
         """Persist ``goal``, upserting on ``(user_id, activity, week.value)`` (Monday date)."""
         raise NotImplementedError

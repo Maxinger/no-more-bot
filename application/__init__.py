@@ -1,5 +1,9 @@
 from application.use_case import UseCase, handles
 from application.use_cases import (
+    ExportUserDataCommand,
+    ExportUserDataResult,
+    ExportUserDataUseCase,
+    ExportedWeek,
     LoadCurrentWeekGoalPreviewCommand,
     LoadCurrentWeekGoalPreviewResult,
     LoadWeekProgressInRangeCommand,
@@ -18,6 +22,10 @@ from application.use_cases import (
 )
 
 __all__ = [
+    "ExportUserDataCommand",
+    "ExportUserDataResult",
+    "ExportUserDataUseCase",
+    "ExportedWeek",
     "LoadCurrentWeekGoalPreviewCommand",
     "LoadCurrentWeekGoalPreviewResult",
     "LoadWeekProgressCommand",

@@ -7,24 +7,13 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from domain.ports import RecordRepository, WeekGoalRepository
-from domain.record import Activity, Record, RecordTime, WeekStart
+from domain.record import Record, RecordTime, WeekStart
 from domain.week_goal import WeekGoal
 from infra import InMemoryRepositories
+from infra.initial_data_format import DAY_INDEX, JSON_ACTIVITY
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INITIAL_DATA_PATH = _REPO_ROOT / "tests" / "initial-data.json"
-
-_JSON_ACTIVITY = {"work": Activity.HOME, "sleep": Activity.BED}
-
-_DAY_INDEX = {
-    "mon": 0,
-    "tue": 1,
-    "wed": 2,
-    "thu": 3,
-    "fri": 4,
-    "sat": 5,
-    "sun": 6,
-}
 
 
 def parse_initial_data_document(data: dict) -> tuple[int, list[dict]]:
@@ -49,23 +38,23 @@ def apply_parsed_week_block(
     """Apply goals and records from one fixture week into repositories."""
     week = WeekStart(date.fromisoformat(block["startDate"]))
     for key, hhmm in (block.get("goals") or {}).items():
-        if key not in _JSON_ACTIVITY:
+        if key not in JSON_ACTIVITY:
             raise ValueError(f"unknown goal activity {key!r}")
         goals.save(
             WeekGoal(
                 user_id=user_id,
-                activity=_JSON_ACTIVITY[key],
+                activity=JSON_ACTIVITY[key],
                 week=week,
                 target_time=datetime.strptime(str(hhmm).strip(), "%H:%M").time(),
             )
         )
 
     for activity_key, days in (block.get("data") or {}).items():
-        if activity_key not in _JSON_ACTIVITY:
+        if activity_key not in JSON_ACTIVITY:
             raise ValueError(f"unknown data activity {activity_key!r}")
-        activity = _JSON_ACTIVITY[activity_key]
+        activity = JSON_ACTIVITY[activity_key]
         for day_abbr, hhmm in days.items():
-            idx = _DAY_INDEX.get(day_abbr.lower())
+            idx = DAY_INDEX.get(day_abbr.lower())
             if idx is None:
                 raise ValueError(f"unknown weekday {day_abbr!r}")
             records.save(

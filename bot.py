@@ -2,10 +2,11 @@
 import datetime
 import logging
 import os
+from io import BytesIO
 from typing import Any
 
 from dotenv import load_dotenv
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, Update
 from telegram.error import BadRequest
 from telegram.ext import (
     Application,
@@ -17,6 +18,8 @@ from telegram.ext import (
 )
 
 from application import (
+    ExportUserDataCommand,
+    ExportUserDataUseCase,
     LoadCurrentWeekGoalPreviewCommand,
     LoadWeekProgressUseCase,
     RecordActivityForDayCommand,
@@ -29,7 +32,12 @@ from domain.record import Activity, WeekStart
 from domain.user import User
 from infra import InMemoryRepositories
 from infra.dev import apply_initial_data_fixture
-from representation import ActivityWeeksReportText, CurrentWeekSummaryText, WeekDetailsText
+from representation import (
+    ActivityWeeksReportText,
+    CurrentWeekSummaryText,
+    InitialDataJsonBytes,
+    WeekDetailsText,
+)
 from representation.formatting_utils import SEPARATOR
 
 logger = logging.getLogger(__name__)
@@ -41,6 +49,8 @@ week_details_text = WeekDetailsText(load_week_progress)
 activity_weeks_report_text = ActivityWeeksReportText(load_week_progress)
 record_activity = RecordActivityUseCase(repositories.records)
 set_week_goal = SetWeekGoalUseCase(repositories.goals)
+export_user_data = ExportUserDataUseCase(repositories.goals, repositories.records)
+initial_data_json_bytes = InitialDataJsonBytes()
 
 USER_DATA_PENDING_ACTION = "pending_action"
 HOME_ICON = "🏠"
@@ -69,6 +79,9 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(f"{TIME_ICON} Past", callback_data="menu:past"),
                 InlineKeyboardButton(f"{GOALS_ICON} Goals", callback_data="menu:goals"),
+            ],
+            [
+                InlineKeyboardButton("Export", callback_data="export:data"),
             ],
         ]
     )
@@ -502,6 +515,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 "`dd.mm.yyyy HH:MM` or `dd.mm HH:MM`."
             )
             reply_markup = pending_reply_markup("event_date")
+    elif query.data == "export:data":
+        clear_pending_action(context)
+        result = export_user_data.handle(ExportUserDataCommand(user=user))
+        payload = initial_data_json_bytes.serialize(result)
+        await context.bot.send_document(
+            chat_id=query.message.chat_id,
+            document=InputFile(
+                BytesIO(payload),
+                filename=f"nomorebot-export-{user_id}-{current_date_for_user(user).strftime('%Y%m%d')}.json",
+            ),
+            caption="Your data export",
+        )
+        text = "Export sent. Check the file above."
+        reply_markup = main_menu_keyboard()
     else:
         logger.warning("PROCESS callback ignored unknown data=%r", query.data)
         return

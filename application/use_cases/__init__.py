@@ -1,3 +1,9 @@
+from application.use_cases.export_user_data import (
+    ExportUserDataCommand,
+    ExportUserDataResult,
+    ExportUserDataUseCase,
+    ExportedWeek,
+)
 from application.use_cases.load_week_progress import (
     LoadCurrentWeekGoalPreviewCommand,
     LoadCurrentWeekGoalPreviewResult,
@@ -21,6 +27,10 @@ from application.use_cases.set_week_goal import (
 )
 
 __all__ = [
+    "ExportUserDataCommand",
+    "ExportUserDataResult",
+    "ExportUserDataUseCase",
+    "ExportedWeek",
     "LoadCurrentWeekGoalPreviewCommand",
     "LoadCurrentWeekGoalPreviewResult",
     "LoadWeekProgressCommand",
