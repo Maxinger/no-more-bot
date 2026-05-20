@@ -56,6 +56,17 @@ class LoadWeekProgressInRangeResult:
     weeks: tuple[WeekProgressInRangeEntry, ...]
 
 
+@dataclass(frozen=True)
+class LoadActivityAvailableWeeksCommand:
+    user: User
+    activity: Activity
+
+
+@dataclass(frozen=True)
+class LoadActivityAvailableWeeksResult:
+    weeks: tuple[WeekStart, ...]
+
+
 class LoadWeekProgressUseCase(UseCase):
     def __init__(self, goals: WeekGoalRepository, records: RecordRepository):
         self._goals = goals
@@ -119,6 +130,22 @@ class LoadWeekProgressUseCase(UseCase):
             current_week = WeekStart(current_week.value + timedelta(days=7))
 
         return LoadWeekProgressInRangeResult(weeks=tuple(entries))
+
+    @handles(LoadActivityAvailableWeeksCommand)
+    def _load_activity_available_weeks(
+        self, command: LoadActivityAvailableWeeksCommand
+    ) -> LoadActivityAvailableWeeksResult:
+        user_id = command.user.id
+        activity = command.activity
+        week_mondays: set[date] = set()
+        for goal in self._goals.find_all_for_user(user_id):
+            if goal.activity == activity:
+                week_mondays.add(goal.week.value)
+        for record in self._records.find_all_for_user(user_id):
+            if record.activity == activity:
+                week_mondays.add(WeekStart.from_any_date(record.time.date).value)
+        weeks = tuple(WeekStart(week_monday) for week_monday in sorted(week_mondays))
+        return LoadActivityAvailableWeeksResult(weeks=weeks)
 
     def _load_progress(
         self, user: User, activity: Activity, week: WeekStart

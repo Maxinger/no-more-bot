@@ -7,7 +7,7 @@ alwaysApply: false
 
 Use these numbers when discussing or changing bot behavior. Buttons are denoted in square brackets. `[Back to Menu]` should be available as a wide bottom-row button from every non-main-menu screen and should return to the current week summary with main menu buttons.
 
-1. `/start` -> Output current week summary -> Show main menu (`[🏠 Now]`, `[🛏️ Now]`, `[⏰ Past]`, `[🎯 Goals]`, `[Export]`) (includes `[Export]`)
+1. `/start` -> Output current week summary -> Show main menu (`[🏠 Now]`, `[🛏️ Now]`, `[⏰ Past]`, `[🎯 Goals]`, `[📊 Reports]`)
 2. `[🏠 Now]` -> Insert new home record now -> Output home week progress
 3. `[🛏️ Now]` -> Insert new bed record now -> Output bed week progress
 4. `[⏰ Past]` -> `[🏠 Yesterday]` -> Enter `HH:MM` -> Insert home record for yesterday -> Output yesterday's home week progress
@@ -22,4 +22,9 @@ Use these numbers when discussing or changing bot behavior. Buttons are denoted 
 13. `[🎯 Goals]` -> `[🏠 Set]` -> Enter `HH:MM` -> Save current home week goal -> Output current home week progress
 14. `[🎯 Goals]` -> `[🛏️ Set]` -> Enter `HH:MM` -> Save current bed week goal -> Output current bed week progress
 15. `[Back to Menu]` from any non-main-menu screen -> Output current week summary -> Show main menu
-16. `[Export]` -> Generate JSON export of all user data -> Send downloadable file -> Output confirmation -> Show main menu
+16. `[📊 Reports]` -> Short intro -> Show `[🏠 This week]`, `[🛏️ This week]`, `[🏠 All]`, `[🛏️ All]`, `[Export]`, and `[Back to Menu]`
+17. `[📊 Reports]` -> `[🏠 This week]` -> Output WeekDetailsText for current home week -> Show `[Back to Reports]` and `[Back to Menu]` on one row
+18. `[📊 Reports]` -> `[🛏️ This week]` -> Output WeekDetailsText for current bed week -> Show `[Back to Reports]` and `[Back to Menu]` on one row
+19. `[📊 Reports]` -> `[🏠 All]` -> Output ActivityWeeksReportText for all home weeks with data -> Show `[Back to Reports]` and `[Back to Menu]` on one row
+20. `[📊 Reports]` -> `[🛏️ All]` -> Output ActivityWeeksReportText for all bed weeks with data -> Show `[Back to Reports]` and `[Back to Menu]` on one row
+21. `[📊 Reports]` -> `[Export]` -> Generate JSON export of all user data -> Send downloadable file -> Output confirmation -> Show `[Back to Reports]` and `[Back to Menu]` on one row

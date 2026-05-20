@@ -62,6 +62,85 @@ class ActivityWeeksReportTextTest(unittest.TestCase):
             ),
         )
 
+    def test_report_for_all_weeks_shows_only_weeks_with_data_without_gaps(self) -> None:
+        repositories = InMemoryRepositories()
+        report = ActivityWeeksReportText(
+            LoadWeekProgressUseCase(repositories.goals, repositories.records)
+        )
+        self._save_goal_and_records(
+            repositories,
+            week=datetime.date(2026, 4, 6),
+            target=datetime.time(20, 10),
+            times=(datetime.time(20, 0),),
+        )
+        self._save_goal_and_records(
+            repositories,
+            week=datetime.date(2026, 5, 11),
+            target=datetime.time(20, 5),
+            times=(datetime.time(20, 5),),
+        )
+
+        text = report.report_for_all_weeks(
+            user=User(123),
+            activity=Activity.HOME,
+            date=datetime.date(2026, 5, 17),
+        )
+
+        self.assertEqual(
+            text,
+            "\n".join(
+                [
+                    "06.04.2026",
+                    "🏠 20:10 🟢 +10 (1)",
+                    "11.05.2026",
+                    "🏠 20:05 ⚪ +0 (1)",
+                ]
+            ),
+        )
+
+    def test_report_for_all_weeks_returns_empty_message_when_no_data(self) -> None:
+        repositories = InMemoryRepositories()
+        report = ActivityWeeksReportText(
+            LoadWeekProgressUseCase(repositories.goals, repositories.records)
+        )
+
+        text = report.report_for_all_weeks(
+            user=User(123),
+            activity=Activity.BED,
+            date=datetime.date(2026, 5, 17),
+        )
+
+        self.assertEqual(text, "No 🛏️ weeks yet.")
+
+    def test_report_for_all_weeks_marks_week_with_records_but_no_goal(self) -> None:
+        repositories = InMemoryRepositories()
+        report = ActivityWeeksReportText(
+            LoadWeekProgressUseCase(repositories.goals, repositories.records)
+        )
+        repositories.records.save(
+            Record(
+                user_id=123,
+                activity=Activity.BED,
+                time=RecordTime(datetime.date(2026, 5, 13), datetime.time(23, 30)),
+            )
+        )
+
+        text = report.report_for_all_weeks(
+            user=User(123),
+            activity=Activity.BED,
+            date=datetime.date(2026, 5, 17),
+        )
+
+        self.assertEqual(
+            text,
+            "\n".join(
+                [
+                    "11.05.2026",
+                    "🛏️ not set",
+                ]
+            ),
+        )
+
     def test_report_marks_missing_goal(self) -> None:
         repositories = InMemoryRepositories()
         report = ActivityWeeksReportText(

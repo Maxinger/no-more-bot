@@ -2,6 +2,8 @@ import datetime
 import unittest
 
 from application import (
+    LoadActivityAvailableWeeksCommand,
+    LoadActivityAvailableWeeksResult,
     LoadCurrentWeekGoalPreviewCommand,
     LoadCurrentWeekGoalPreviewResult,
     LoadWeekProgressInRangeCommand,
@@ -275,6 +277,80 @@ class LoadWeekProgressUseCaseTest(unittest.TestCase):
                     end_date=datetime.date(2026, 5, 4),
                 )
             )
+
+    def test_available_weeks_returns_empty_for_user_with_no_data(self) -> None:
+        use_case = LoadWeekProgressUseCase(
+            InMemoryWeekGoalRepository(),
+            InMemoryRecordRepository(),
+        )
+
+        result = use_case.handle(
+            LoadActivityAvailableWeeksCommand(user=User(123), activity=Activity.HOME)
+        )
+
+        self.assertEqual(result, LoadActivityAvailableWeeksResult(weeks=()))
+
+    def test_available_weeks_includes_home_goal_and_record_weeks_only(self) -> None:
+        goals = InMemoryWeekGoalRepository()
+        records = InMemoryRecordRepository()
+        use_case = LoadWeekProgressUseCase(goals, records)
+        goals.save(
+            WeekGoal(
+                user_id=123,
+                activity=Activity.HOME,
+                week=WeekStart(datetime.date(2026, 4, 6)),
+                target_time=datetime.time(20, 0),
+            )
+        )
+        records.save(
+            Record(
+                user_id=123,
+                activity=Activity.HOME,
+                time=RecordTime(datetime.date(2026, 5, 15), datetime.time(21, 0)),
+            )
+        )
+        goals.save(
+            WeekGoal(
+                user_id=123,
+                activity=Activity.BED,
+                week=WeekStart(datetime.date(2026, 5, 11)),
+                target_time=datetime.time(23, 0),
+            )
+        )
+
+        result = use_case.handle(
+            LoadActivityAvailableWeeksCommand(user=User(123), activity=Activity.HOME)
+        )
+
+        self.assertEqual(
+            result,
+            LoadActivityAvailableWeeksResult(
+                weeks=(
+                    WeekStart(datetime.date(2026, 4, 6)),
+                    WeekStart(datetime.date(2026, 5, 11)),
+                )
+            ),
+        )
+
+    def test_available_weeks_includes_bed_record_week_without_goal(self) -> None:
+        records = InMemoryRecordRepository()
+        use_case = LoadWeekProgressUseCase(InMemoryWeekGoalRepository(), records)
+        records.save(
+            Record(
+                user_id=123,
+                activity=Activity.BED,
+                time=RecordTime(datetime.date(2026, 5, 13), datetime.time(23, 30)),
+            )
+        )
+
+        result = use_case.handle(
+            LoadActivityAvailableWeeksCommand(user=User(123), activity=Activity.BED)
+        )
+
+        self.assertEqual(
+            result,
+            LoadActivityAvailableWeeksResult(weeks=(WeekStart(datetime.date(2026, 5, 11)),)),
+        )
 
     def test_unsupported_command_is_rejected(self) -> None:
         use_case = LoadWeekProgressUseCase(

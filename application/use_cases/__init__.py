@@ -5,6 +5,8 @@ from application.use_cases.export_user_data import (
     ExportedWeek,
 )
 from application.use_cases.load_week_progress import (
+    LoadActivityAvailableWeeksCommand,
+    LoadActivityAvailableWeeksResult,
     LoadCurrentWeekGoalPreviewCommand,
     LoadCurrentWeekGoalPreviewResult,
     LoadWeekProgressInRangeCommand,
@@ -31,6 +33,8 @@ __all__ = [
     "ExportUserDataResult",
     "ExportUserDataUseCase",
     "ExportedWeek",
+    "LoadActivityAvailableWeeksCommand",
+    "LoadActivityAvailableWeeksResult",
     "LoadCurrentWeekGoalPreviewCommand",
     "LoadCurrentWeekGoalPreviewResult",
     "LoadWeekProgressCommand",

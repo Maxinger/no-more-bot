@@ -214,14 +214,46 @@ class BotRepositoryBootstrapTest(unittest.TestCase):
 
 
 class BotHelpersTest(unittest.TestCase):
-    def test_main_menu_contains_export_button(self) -> None:
+    def test_main_menu_contains_reports_button_not_export(self) -> None:
         markup = bot.main_menu_keyboard()
 
         self.assertEqual(len(markup.inline_keyboard), 3)
-        export_row = markup.inline_keyboard[2]
-        self.assertEqual(len(export_row), 1)
-        self.assertEqual(export_row[0].text, "Export")
-        self.assertEqual(export_row[0].callback_data, "export:data")
+        reports_row = markup.inline_keyboard[2]
+        self.assertEqual(len(reports_row), 1)
+        self.assertEqual(reports_row[0].text, "📊 Reports")
+        self.assertEqual(reports_row[0].callback_data, "menu:reports")
+        all_callback_data = {
+            button.callback_data
+            for row in markup.inline_keyboard
+            for button in row
+        }
+        self.assertNotIn("export:data", all_callback_data)
+
+    def test_reports_navigation_keyboard(self) -> None:
+        markup = bot.reports_navigation_keyboard()
+
+        self.assertEqual(len(markup.inline_keyboard), 1)
+        self.assertEqual(len(markup.inline_keyboard[0]), 2)
+        self.assertEqual(markup.inline_keyboard[0][0].text, "Back to Reports")
+        self.assertEqual(markup.inline_keyboard[0][0].callback_data, "menu:reports")
+        self.assertEqual(markup.inline_keyboard[0][1].text, "Back to Menu")
+        self.assertEqual(markup.inline_keyboard[0][1].callback_data, "menu:main")
+
+    def test_reports_menu_keyboard(self) -> None:
+        markup = bot.reports_menu_keyboard()
+
+        self.assertEqual(markup.inline_keyboard[0][0].text, "🏠 This week")
+        self.assertEqual(markup.inline_keyboard[0][0].callback_data, "report_this_week:home")
+        self.assertEqual(markup.inline_keyboard[0][1].text, "🛏️ This week")
+        self.assertEqual(markup.inline_keyboard[0][1].callback_data, "report_this_week:bed")
+        self.assertEqual(markup.inline_keyboard[1][0].text, "🏠 All")
+        self.assertEqual(markup.inline_keyboard[1][0].callback_data, "report_all:home")
+        self.assertEqual(markup.inline_keyboard[1][1].text, "🛏️ All")
+        self.assertEqual(markup.inline_keyboard[1][1].callback_data, "report_all:bed")
+        self.assertEqual(markup.inline_keyboard[2][0].text, "Export")
+        self.assertEqual(markup.inline_keyboard[2][0].callback_data, "export:data")
+        self.assertEqual(markup.inline_keyboard[3][0].text, "Back to Menu")
+        self.assertEqual(markup.inline_keyboard[3][0].callback_data, "menu:main")
 
     def test_pending_reply_markup_contains_back_to_menu_button(self) -> None:
         markup = bot.pending_reply_markup("event_yesterday")
@@ -304,10 +336,15 @@ class FakeWeekDetailsText:
 class FakeActivityWeeksReportText:
     def __init__(self) -> None:
         self.calls = []
+        self.all_weeks_calls = []
 
     def report_for_activity(self, user, activity, date):
         self.calls.append((user.id, activity, date))
         return f"Activity weeks report for {activity.value} on {date.isoformat()}"
+
+    def report_for_all_weeks(self, user, activity, date):
+        self.all_weeks_calls.append((user.id, activity, date))
+        return f"All weeks report for {activity.value} on {date.isoformat()}"
 
 
 class FakeLoadWeekProgress:
@@ -590,7 +627,7 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertEqual(
             message.replies[0]["text"],
-            "Expected HH:MM, for example 22:30. Send /start to cancel.",
+            "Use HH:MM (e.g., 22:30).",
         )
         self.assertEqual(message.replies[0]["reply_markup"].inline_keyboard[0][0].callback_data, "menu:main")
 
@@ -686,7 +723,7 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(query.answers, 1)
         self.assertIn("Week details for going_home on 2026-05-14", query.edits[0]["text"])
-        self.assertIn("Tap Auto", query.edits[0]["text"])
+        self.assertIn("Tap Auto for suggested goal.", query.edits[0]["text"])
         self.assertEqual(
             fake_week_details_text.calls[0],
             (123, bot.Activity.HOME, datetime.date(2026, 5, 14), progress),
@@ -724,8 +761,8 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             bot.load_week_progress = original_load_week_progress
             bot.week_details_text = original_week_details_text
 
-        self.assertNotIn("Tap Auto", query.edits[0]["text"])
-        self.assertIn("Send HH:MM", query.edits[0]["text"])
+        self.assertNotIn("Tap Auto for suggested goal.", query.edits[0]["text"])
+        self.assertIn("Send HH:MM for Bed goal.", query.edits[0]["text"])
         self.assertEqual(
             fake_week_details_text.calls[0][1:],
             (bot.Activity.BED, datetime.date(2026, 5, 14), None),
@@ -809,16 +846,93 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake_export.commands[0].user.id, 123)
         self.assertEqual(len(fake_bot.documents), 1)
         self.assertEqual(fake_bot.documents[0]["chat_id"], 789)
-        self.assertEqual(fake_bot.documents[0]["caption"], "Your data export")
+        self.assertEqual(fake_bot.documents[0]["caption"], "Data export")
         self.assertEqual(
             fake_bot.documents[0]["document"].filename,
             "nomorebot-export-123-20260519.json",
         )
-        self.assertEqual(query.edits[0]["text"], "Export sent. Check the file above.")
-        self.assertEqual(
-            query.edits[0]["reply_markup"].inline_keyboard[2][0].callback_data,
-            "export:data",
+        self.assertEqual(query.edits[0]["text"], "Export sent.")
+        markup = query.edits[0]["reply_markup"]
+        self.assertEqual(markup.inline_keyboard[0][0].text, "Back to Reports")
+        self.assertEqual(markup.inline_keyboard[0][0].callback_data, "menu:reports")
+        self.assertEqual(markup.inline_keyboard[0][1].text, "Back to Menu")
+        self.assertEqual(markup.inline_keyboard[0][1].callback_data, "menu:main")
+
+    async def test_reports_button_shows_reports_menu(self) -> None:
+        query = FakeCallbackQuery("menu:reports")
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            callback_query=query,
         )
+        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_date"}})
+
+        await bot.button_callback(update, context)
+
+        self.assertEqual(query.answers, 1)
+        self.assertIn("Reports:", query.edits[0]["text"])
+        self.assertEqual(
+            query.edits[0]["reply_markup"].inline_keyboard[0][0].callback_data,
+            "report_this_week:home",
+        )
+        self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
+
+    async def test_report_this_week_home_shows_week_details(self) -> None:
+        original_week_details_text = bot.week_details_text
+        fake_week_details_text = FakeWeekDetailsText()
+        bot.week_details_text = fake_week_details_text
+        query = FakeCallbackQuery("report_this_week:home")
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            callback_query=query,
+        )
+        context = types.SimpleNamespace(user_data={})
+
+        try:
+            with patch("bot.current_utc_datetime") as mock_now:
+                mock_now.return_value = datetime.datetime(
+                    2026, 5, 17, 9, 0, tzinfo=datetime.timezone.utc
+                )
+                await bot.button_callback(update, context)
+        finally:
+            bot.week_details_text = original_week_details_text
+
+        self.assertEqual(query.answers, 1)
+        self.assertEqual(
+            fake_week_details_text.calls,
+            [(123, bot.Activity.HOME, datetime.date(2026, 5, 17), None)],
+        )
+        self.assertEqual(query.edits[0]["text"], "Week details for going_home on 2026-05-17")
+        self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][0].callback_data, "menu:reports")
+        self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][1].callback_data, "menu:main")
+
+    async def test_report_all_home_shows_all_weeks_report(self) -> None:
+        original_activity_weeks_report_text = bot.activity_weeks_report_text
+        fake_activity_weeks_report_text = FakeActivityWeeksReportText()
+        bot.activity_weeks_report_text = fake_activity_weeks_report_text
+        query = FakeCallbackQuery("report_all:home")
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            callback_query=query,
+        )
+        context = types.SimpleNamespace(user_data={})
+
+        try:
+            with patch("bot.current_utc_datetime") as mock_now:
+                mock_now.return_value = datetime.datetime(
+                    2026, 5, 17, 9, 0, tzinfo=datetime.timezone.utc
+                )
+                await bot.button_callback(update, context)
+        finally:
+            bot.activity_weeks_report_text = original_activity_weeks_report_text
+
+        self.assertEqual(query.answers, 1)
+        self.assertEqual(
+            fake_activity_weeks_report_text.all_weeks_calls,
+            [(123, bot.Activity.HOME, datetime.date(2026, 5, 17))],
+        )
+        self.assertEqual(query.edits[0]["text"], "All weeks report for going_home on 2026-05-17")
+        self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][0].callback_data, "menu:reports")
+        self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][1].callback_data, "menu:main")
 
     async def test_record_now_uses_minsk_timezone_near_utc_midnight(self) -> None:
         original_record_activity = bot.record_activity

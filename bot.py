@@ -161,14 +161,16 @@ BED_ICON = "🛏️"
 TIME_ICON = "⏰"
 CALENDAR_ICON = "📅"
 GOALS_ICON = "🎯"
+REPORTS_ICON = "📊"
 BACK_TO_MENU_LABEL = "Back to Menu"
+BACK_TO_REPORTS_LABEL = "Back to Reports"
 
 WELCOME = (
-    "NoMoreBot — track activities.\n\n"
-    f"{HOME_ICON} Now and {BED_ICON} Now record an event immediately.\n"
-    f"{TIME_ICON} Past lets you save yesterday or a specific date.\n"
-    f"{GOALS_ICON} Goals shows the last 3 weeks.\n\n"
-    "Send /start anytime to return to the main menu."
+    "NoMoreBot.\n\n"
+    f"{HOME_ICON}/{BED_ICON} Now: save now\n"
+    f"{TIME_ICON} Past: save earlier\n"
+    f"{GOALS_ICON} Goals: set targets\n"
+    f"{REPORTS_ICON} Reports: details/export"
 )
 
 
@@ -184,7 +186,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(f"{GOALS_ICON} Goals", callback_data="menu:goals"),
             ],
             [
-                InlineKeyboardButton("Export", callback_data="export:data"),
+                InlineKeyboardButton(f"{REPORTS_ICON} Reports", callback_data="menu:reports"),
             ],
         ]
     )
@@ -198,6 +200,17 @@ def back_to_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([back_to_menu_row()])
 
 
+def reports_navigation_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(BACK_TO_REPORTS_LABEL, callback_data="menu:reports"),
+                InlineKeyboardButton(BACK_TO_MENU_LABEL, callback_data="menu:main"),
+            ]
+        ]
+    )
+
+
 def past_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
@@ -208,6 +221,31 @@ def past_menu_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(f"{HOME_ICON} Earlier", callback_data="past_date:home"),
                 InlineKeyboardButton(f"{BED_ICON} Earlier", callback_data="past_date:bed"),
+            ],
+            back_to_menu_row(),
+        ]
+    )
+
+
+def reports_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    f"{HOME_ICON} This week",
+                    callback_data="report_this_week:home",
+                ),
+                InlineKeyboardButton(
+                    f"{BED_ICON} This week",
+                    callback_data="report_this_week:bed",
+                ),
+            ],
+            [
+                InlineKeyboardButton(f"{HOME_ICON} All", callback_data="report_all:home"),
+                InlineKeyboardButton(f"{BED_ICON} All", callback_data="report_all:bed"),
+            ],
+            [
+                InlineKeyboardButton("Export", callback_data="export:data"),
             ],
             back_to_menu_row(),
         ]
@@ -321,9 +359,9 @@ def goal_set_screen_for_current_week(
         date=current_date,
         auto_progress=preview.progress if preview.is_auto else None,
     )
-    instructions = [f"Send HH:MM to save a {activity_name(activity)} goal."]
+    instructions = [f"Send HH:MM for {activity_name(activity)} goal."]
     if preview.is_auto and preview.progress is not None:
-        instructions.insert(0, "Tap Auto to save the recommended goal.")
+        instructions.insert(0, "Tap Auto for suggested goal.")
     return (
         f"{text}\n\n" + "\n".join(instructions),
         goal_set_keyboard(activity, has_auto=preview.is_auto and preview.progress is not None),
@@ -425,7 +463,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         time_value = parse_hhmm(text)
         if time_value is None:
             await update.message.reply_text(
-                "Expected HH:MM, for example 22:30. Send /start to cancel.",
+                "Use HH:MM (e.g., 22:30).",
                 reply_markup=pending_reply_markup(kind),
             )
             return
@@ -453,7 +491,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         timestamp = parse_past_event_datetime(text)
         if timestamp is None:
             await update.message.reply_text(
-                "Expected `dd.mm.yyyy HH:MM` or `dd.mm HH:MM`, for example `12.04.2026 22:30`.",
+                "Use `dd.mm.yyyy HH:MM` or `dd.mm HH:MM`.",
                 reply_markup=pending_reply_markup(kind),
             )
             return
@@ -480,7 +518,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         target_time = parse_hhmm(text)
         if target_time is None:
             await update.message.reply_text(
-                "Expected HH:MM, for example 22:30. Send /start to cancel.",
+                "Use HH:MM (e.g., 22:30).",
                 reply_markup=pending_reply_markup(kind),
             )
             return
@@ -526,16 +564,50 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif query.data == "menu:past":
         clear_pending_action(context)
         text = (
-            "Choose a past event flow.\n\n"
-            f"• {HOME_ICON} Yesterday / {BED_ICON} Yesterday expects HH:MM\n"
-            f"• {CALENDAR_ICON} Date expects `dd.mm.yyyy HH:MM` or `dd.mm HH:MM`\n\n"
-            f"Tap {BACK_TO_MENU_LABEL} or send /start to return to the main menu."
+            "Past events:\n\n"
+            f"• Yesterday: HH:MM\n"
+            f"• Earlier: `dd.mm.yyyy HH:MM` or `dd.mm HH:MM`"
         )
         reply_markup = past_menu_keyboard()
+    elif query.data == "menu:reports":
+        clear_pending_action(context)
+        text = (
+            "Reports:\n\n"
+            f"• This week: details\n"
+            f"• All: all saved weeks\n"
+            "• Export: JSON file"
+        )
+        reply_markup = reports_menu_keyboard()
     elif query.data == "menu:goals":
         clear_pending_action(context)
         text = goals_report_for_current_week(user)
         reply_markup = goals_menu_keyboard()
+    elif query.data.startswith("report_this_week:"):
+        clear_pending_action(context)
+        token = query.data.split(":", 1)[1]
+        activity = parse_activity_token(token)
+        if activity is None:
+            text = "Unknown activity."
+        else:
+            text = week_details_text.details_for_week(
+                user=user,
+                activity=activity,
+                date=current_date_for_user(user),
+            )
+            reply_markup = reports_navigation_keyboard()
+    elif query.data.startswith("report_all:"):
+        clear_pending_action(context)
+        token = query.data.split(":", 1)[1]
+        activity = parse_activity_token(token)
+        if activity is None:
+            text = "Unknown activity."
+        else:
+            text = activity_weeks_report_text.report_for_all_weeks(
+                user=user,
+                activity=activity,
+                date=current_date_for_user(user),
+            )
+            reply_markup = reports_navigation_keyboard()
     elif query.data.startswith("goal_set:"):
         token = query.data.split(":", 1)[1]
         activity = parse_activity_token(token)
@@ -604,7 +676,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             text = "Unknown activity."
         else:
             set_pending_action(context, "event_yesterday", activity)
-            text = f"Send the time for yesterday's {activity_name(activity)} event as HH:MM."
+            text = f"Send yesterday's {activity_name(activity)} time: HH:MM."
             reply_markup = pending_reply_markup("event_yesterday")
     elif query.data.startswith("past_date:"):
         token = query.data.split(":", 1)[1]
@@ -613,10 +685,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             text = "Unknown activity."
         else:
             set_pending_action(context, "event_date", activity)
-            text = (
-                f"Send the date and time for the {activity_name(activity)} event as "
-                "`dd.mm.yyyy HH:MM` or `dd.mm HH:MM`."
-            )
+            text = f"Send {activity_name(activity)} date/time: `dd.mm.yyyy HH:MM` or `dd.mm HH:MM`."
             reply_markup = pending_reply_markup("event_date")
     elif query.data == "export:data":
         clear_pending_action(context)
@@ -628,10 +697,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 BytesIO(payload),
                 filename=f"nomorebot-export-{user_id}-{current_date_for_user(user).strftime('%Y%m%d')}.json",
             ),
-            caption="Your data export",
+            caption="Data export",
         )
-        text = "Export sent. Check the file above."
-        reply_markup = main_menu_keyboard()
+        text = "Export sent."
+        reply_markup = reports_navigation_keyboard()
     else:
         logger.warning("PROCESS callback ignored unknown data=%r", query.data)
         return
