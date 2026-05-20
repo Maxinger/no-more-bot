@@ -359,9 +359,9 @@ def goal_set_screen_for_current_week(
         date=current_date,
         auto_progress=preview.progress if preview.is_auto else None,
     )
-    instructions = [f"Send HH:MM for {activity_name(activity)} goal."]
+    instructions = [f"HH:MM for {activity_name(activity)} goal."]
     if preview.is_auto and preview.progress is not None:
-        instructions.insert(0, "Tap Auto for suggested goal.")
+        instructions.insert(0, "Auto = suggested goal.")
     return (
         f"{text}\n\n" + "\n".join(instructions),
         goal_set_keyboard(activity, has_auto=preview.is_auto and preview.progress is not None),
@@ -463,7 +463,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         time_value = parse_hhmm(text)
         if time_value is None:
             await update.message.reply_text(
-                "Use HH:MM (e.g., 22:30).",
+                "HH:MM only.",
                 reply_markup=pending_reply_markup(kind),
             )
             return
@@ -491,7 +491,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         timestamp = parse_past_event_datetime(text)
         if timestamp is None:
             await update.message.reply_text(
-                "Use `dd.mm.yyyy HH:MM` or `dd.mm HH:MM`.",
+                "`dd.mm.yyyy HH:MM` or `dd.mm HH:MM`.",
                 reply_markup=pending_reply_markup(kind),
             )
             return
@@ -518,7 +518,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         target_time = parse_hhmm(text)
         if target_time is None:
             await update.message.reply_text(
-                "Use HH:MM (e.g., 22:30).",
+                "HH:MM only.",
                 reply_markup=pending_reply_markup(kind),
             )
             return
@@ -564,19 +564,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif query.data == "menu:past":
         clear_pending_action(context)
         text = (
-            "Past events:\n\n"
+            "Past:\n\n"
             f"• Yesterday: HH:MM\n"
-            f"• Earlier: `dd.mm.yyyy HH:MM` or `dd.mm HH:MM`"
+            f"• Earlier: `dd.mm.yyyy HH:MM` / `dd.mm HH:MM`"
         )
         reply_markup = past_menu_keyboard()
     elif query.data == "menu:reports":
         clear_pending_action(context)
-        text = (
-            "Reports:\n\n"
-            f"• This week: details\n"
-            f"• All: all saved weeks\n"
-            "• Export: JSON file"
-        )
+        text = "Reports"
         reply_markup = reports_menu_keyboard()
     elif query.data == "menu:goals":
         clear_pending_action(context)
@@ -676,7 +671,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             text = "Unknown activity."
         else:
             set_pending_action(context, "event_yesterday", activity)
-            text = f"Send yesterday's {activity_name(activity)} time: HH:MM."
+            text = f"Yesterday {activity_name(activity)}: HH:MM."
             reply_markup = pending_reply_markup("event_yesterday")
     elif query.data.startswith("past_date:"):
         token = query.data.split(":", 1)[1]
@@ -685,7 +680,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             text = "Unknown activity."
         else:
             set_pending_action(context, "event_date", activity)
-            text = f"Send {activity_name(activity)} date/time: `dd.mm.yyyy HH:MM` or `dd.mm HH:MM`."
+            text = f"{activity_name(activity)}: `dd.mm.yyyy HH:MM` / `dd.mm HH:MM`."
             reply_markup = pending_reply_markup("event_date")
     elif query.data == "export:data":
         clear_pending_action(context)

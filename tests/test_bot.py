@@ -627,7 +627,7 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertEqual(
             message.replies[0]["text"],
-            "Use HH:MM (e.g., 22:30).",
+            "HH:MM only.",
         )
         self.assertEqual(message.replies[0]["reply_markup"].inline_keyboard[0][0].callback_data, "menu:main")
 
@@ -723,7 +723,7 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(query.answers, 1)
         self.assertIn("Week details for going_home on 2026-05-14", query.edits[0]["text"])
-        self.assertIn("Tap Auto for suggested goal.", query.edits[0]["text"])
+        self.assertIn("Auto = suggested goal.", query.edits[0]["text"])
         self.assertEqual(
             fake_week_details_text.calls[0],
             (123, bot.Activity.HOME, datetime.date(2026, 5, 14), progress),
@@ -761,8 +761,8 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             bot.load_week_progress = original_load_week_progress
             bot.week_details_text = original_week_details_text
 
-        self.assertNotIn("Tap Auto for suggested goal.", query.edits[0]["text"])
-        self.assertIn("Send HH:MM for Bed goal.", query.edits[0]["text"])
+        self.assertNotIn("Auto = suggested goal.", query.edits[0]["text"])
+        self.assertIn("HH:MM for Bed goal.", query.edits[0]["text"])
         self.assertEqual(
             fake_week_details_text.calls[0][1:],
             (bot.Activity.BED, datetime.date(2026, 5, 14), None),
@@ -869,7 +869,7 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
         await bot.button_callback(update, context)
 
         self.assertEqual(query.answers, 1)
-        self.assertIn("Reports:", query.edits[0]["text"])
+        self.assertIn("Reports", query.edits[0]["text"])
         self.assertEqual(
             query.edits[0]["reply_markup"].inline_keyboard[0][0].callback_data,
             "report_this_week:home",
