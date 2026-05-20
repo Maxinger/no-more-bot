@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, time, timedelta
 from pathlib import Path
@@ -62,14 +63,26 @@ class SQLiteDatabase:
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
+    @contextmanager
+    def connection(self):
+        connection = self.connect()
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
     def initialize_schema(self) -> None:
         logger.debug("Applying SQLite schema at %s", self.path)
-        with self.connect() as connection:
+        with self.connection() as connection:
             connection.executescript(SCHEMA)
         logger.info("SQLite schema ready at %s", self.path)
 
     def table_row_counts(self) -> tuple[int, int]:
-        with self.connect() as connection:
+        with self.connection() as connection:
             record_count = connection.execute("SELECT COUNT(*) FROM records").fetchone()[0]
             goal_count = connection.execute("SELECT COUNT(*) FROM week_goals").fetchone()[0]
         return record_count, goal_count
@@ -91,7 +104,7 @@ class SQLiteRecordRepository(RecordRepository):
     database: SQLiteDatabase
 
     def find(self, user_id: int, activity: Activity, date: date) -> Record | None:
-        with self.database.connect() as connection:
+        with self.database.connection() as connection:
             row = connection.execute(
                 """
                 SELECT user_id, activity, logical_date, time
@@ -107,7 +120,7 @@ class SQLiteRecordRepository(RecordRepository):
     ) -> tuple[Record, ...]:
         start = week.value
         end = start + timedelta(days=6)
-        with self.database.connect() as connection:
+        with self.database.connection() as connection:
             rows = connection.execute(
                 """
                 SELECT user_id, activity, logical_date, time
@@ -127,7 +140,7 @@ class SQLiteRecordRepository(RecordRepository):
         return tuple(self._row_to_record(row) for row in rows)
 
     def find_all_for_user(self, user_id: int) -> tuple[Record, ...]:
-        with self.database.connect() as connection:
+        with self.database.connection() as connection:
             rows = connection.execute(
                 """
                 SELECT user_id, activity, logical_date, time
@@ -140,7 +153,7 @@ class SQLiteRecordRepository(RecordRepository):
         return tuple(self._row_to_record(row) for row in rows)
 
     def save(self, record: Record) -> None:
-        with self.database.connect() as connection:
+        with self.database.connection() as connection:
             connection.execute(
                 """
                 INSERT INTO records (user_id, activity, logical_date, time)
@@ -170,7 +183,7 @@ class SQLiteWeekGoalRepository(WeekGoalRepository):
     database: SQLiteDatabase
 
     def find(self, user_id: int, activity: Activity, week: WeekStart) -> WeekGoal | None:
-        with self.database.connect() as connection:
+        with self.database.connection() as connection:
             row = connection.execute(
                 """
                 SELECT user_id, activity, week_start, target_time
@@ -182,7 +195,7 @@ class SQLiteWeekGoalRepository(WeekGoalRepository):
         return self._row_to_goal(row) if row else None
 
     def find_all_for_user(self, user_id: int) -> tuple[WeekGoal, ...]:
-        with self.database.connect() as connection:
+        with self.database.connection() as connection:
             rows = connection.execute(
                 """
                 SELECT user_id, activity, week_start, target_time
@@ -195,7 +208,7 @@ class SQLiteWeekGoalRepository(WeekGoalRepository):
         return tuple(self._row_to_goal(row) for row in rows)
 
     def save(self, goal: WeekGoal) -> None:
-        with self.database.connect() as connection:
+        with self.database.connection() as connection:
             connection.execute(
                 """
                 INSERT INTO week_goals (user_id, activity, week_start, target_time)
