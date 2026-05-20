@@ -3,6 +3,7 @@ import datetime
 import logging
 import os
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -30,8 +31,8 @@ from application import (
 )
 from domain.record import Activity, WeekStart
 from domain.user import User
-from infra import InMemoryRepositories
-from infra.dev import apply_initial_data_fixture
+from infra import InMemoryRepositories, SQLiteRepositories
+from infra.dev import DEFAULT_INITIAL_DATA_PATH, apply_initial_data_fixture
 from representation import (
     ActivityWeeksReportText,
     CurrentWeekSummaryText,
@@ -41,8 +42,110 @@ from representation import (
 from representation.formatting_utils import SEPARATOR
 
 logger = logging.getLogger(__name__)
-repositories = InMemoryRepositories()
-apply_initial_data_fixture(repositories)
+
+DATABASE_PATH_ENV_VAR = "DB_PATH"
+DEFAULT_DATABASE_PATH = Path(__file__).resolve().parent / "data" / "no-more-bot.sqlite3"
+REPOSITORY_BACKEND_ENV_VAR = "REPOSITORY_BACKEND"
+DEFAULT_REPOSITORY_BACKEND = "db"
+
+
+def repository_backend_from_environment() -> str:
+    configured = os.environ.get(REPOSITORY_BACKEND_ENV_VAR, DEFAULT_REPOSITORY_BACKEND)
+    normalized = configured.strip().lower()
+    if normalized in {"db", "sqlite"}:
+        logger.info("Repository backend from %s: db", REPOSITORY_BACKEND_ENV_VAR)
+        return "db"
+    if normalized in {"memory", "in_memory"}:
+        logger.info("Repository backend from %s: memory", REPOSITORY_BACKEND_ENV_VAR)
+        return "memory"
+    raise SystemExit(
+        f"Invalid {REPOSITORY_BACKEND_ENV_VAR}={configured!r}; use 'db' or 'memory'"
+    )
+
+
+def database_path_from_environment() -> Path:
+    configured_path = os.environ.get(DATABASE_PATH_ENV_VAR)
+    if configured_path:
+        path = Path(configured_path).expanduser()
+        logger.info("Database path from %s: %s", DATABASE_PATH_ENV_VAR, path)
+        return path
+    logger.info("Database path default: %s", DEFAULT_DATABASE_PATH)
+    return DEFAULT_DATABASE_PATH
+
+
+def build_sqlite_repositories(
+    db_path: Path | None = None,
+    *,
+    initial_data_path: Path = DEFAULT_INITIAL_DATA_PATH,
+) -> SQLiteRepositories:
+    if db_path is not None:
+        path = db_path
+        logger.info("Database path explicit: %s", path)
+    else:
+        path = database_path_from_environment()
+
+    database_existed = path.exists()
+    if database_existed:
+        logger.info("Found existing database file at %s", path)
+    else:
+        logger.info("No database file at %s; a new database will be created", path)
+
+    repositories = SQLiteRepositories(path)
+    tables_empty = repositories.database.main_tables_are_empty()
+
+    if not database_existed or tables_empty:
+        logger.info("Seeding database from %s", initial_data_path)
+        apply_initial_data_fixture(repositories, json_path=initial_data_path)
+        record_count, goal_count = repositories.database.table_row_counts()
+        logger.info(
+            "Database seeding complete: records=%d, week_goals=%d",
+            record_count,
+            goal_count,
+        )
+    else:
+        logger.info("Skipping initial data seed; database already contains data")
+
+    return repositories
+
+
+def build_memory_repositories(
+    *,
+    initial_data_path: Path = DEFAULT_INITIAL_DATA_PATH,
+) -> InMemoryRepositories:
+    logger.info("Using in-memory repositories")
+    repositories = InMemoryRepositories()
+    logger.info("Seeding in-memory repositories from %s", initial_data_path)
+    apply_initial_data_fixture(repositories, json_path=initial_data_path)
+    return repositories
+
+
+def build_repositories(
+    db_path: Path | None = None,
+    *,
+    initial_data_path: Path = DEFAULT_INITIAL_DATA_PATH,
+    backend: str | None = None,
+) -> InMemoryRepositories | SQLiteRepositories:
+    selected_backend = backend or repository_backend_from_environment()
+    if selected_backend == "memory":
+        return build_memory_repositories(initial_data_path=initial_data_path)
+    return build_sqlite_repositories(
+        db_path,
+        initial_data_path=initial_data_path,
+    )
+
+
+def configure_logging() -> str:
+    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        level=getattr(logging, log_level, logging.INFO),
+    )
+    return log_level
+
+
+load_dotenv()
+configure_logging()
+repositories = build_repositories()
 load_week_progress = LoadWeekProgressUseCase(repositories.goals, repositories.records)
 current_week_summary_text = CurrentWeekSummaryText(load_week_progress)
 week_details_text = WeekDetailsText(load_week_progress)
@@ -552,11 +655,8 @@ async def post_init(application: Application) -> None:
 
 
 def main() -> None:
-    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        level=getattr(logging, log_level, logging.INFO),
-    )
+    load_dotenv()
+    log_level = configure_logging()
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 

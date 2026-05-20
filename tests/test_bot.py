@@ -1,8 +1,11 @@
 import datetime
 import json
+import os
 import sys
+import tempfile
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 dotenv_module = types.ModuleType("dotenv")
@@ -65,8 +68,149 @@ telegram_ext_module.MessageHandler = object
 telegram_ext_module.filters = types.SimpleNamespace(ALL=object(), TEXT=object(), COMMAND=object())
 sys.modules.setdefault("telegram.ext", telegram_ext_module)
 
+_BOT_TEST_TEMP_DIR = tempfile.TemporaryDirectory()
+os.environ[  # Keep bot import-time repository bootstrap out of the workspace.
+    "DB_PATH"
+] = str(Path(_BOT_TEST_TEMP_DIR.name) / "bot-test.sqlite3")
+
 import bot
-from domain import Record, RecordTime, WeekGoal, WeekProgress, WeekStart
+from domain import Activity, Record, RecordTime, WeekGoal, WeekProgress, WeekStart
+
+
+class BotRepositoryBootstrapTest(unittest.TestCase):
+    def write_initial_data(
+        self,
+        directory: Path,
+        *,
+        time_value: str = "20:42",
+    ) -> Path:
+        path = directory / "initial-data.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "user_id": 123,
+                    "weeks": [
+                        {
+                            "startDate": "2026-04-06",
+                            "goals": {"work": "20:10"},
+                            "data": {"work": {"mon": time_value}},
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    def test_database_path_from_environment_honors_configured_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "configured.sqlite3"
+
+            with patch.dict(os.environ, {bot.DATABASE_PATH_ENV_VAR: str(db_path)}):
+                self.assertEqual(bot.database_path_from_environment(), db_path)
+
+    def test_repository_backend_defaults_to_db(self) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(bot.REPOSITORY_BACKEND_ENV_VAR, None)
+            self.assertEqual(bot.repository_backend_from_environment(), "db")
+
+    def test_repository_backend_honors_memory(self) -> None:
+        with patch.dict(os.environ, {bot.REPOSITORY_BACKEND_ENV_VAR: "memory"}):
+            self.assertEqual(bot.repository_backend_from_environment(), "memory")
+
+    def test_invalid_repository_backend_exits(self) -> None:
+        with patch.dict(os.environ, {bot.REPOSITORY_BACKEND_ENV_VAR: "postgres"}):
+            with self.assertRaises(SystemExit):
+                bot.repository_backend_from_environment()
+
+    def test_build_repositories_creates_and_seeds_missing_database(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            db_path = directory / "bot.sqlite3"
+            initial_data_path = self.write_initial_data(directory)
+
+            repositories = bot.build_repositories(
+                db_path,
+                initial_data_path=initial_data_path,
+                backend="db",
+            )
+
+            self.assertTrue(db_path.exists())
+            week = WeekStart(datetime.date(2026, 4, 6))
+            self.assertEqual(
+                repositories.goals.find(123, Activity.HOME, week).target_time,
+                datetime.time(20, 10),
+            )
+            self.assertEqual(
+                repositories.records.find(123, Activity.HOME, datetime.date(2026, 4, 6)).time,
+                RecordTime(datetime.date(2026, 4, 6), datetime.time(20, 42)),
+            )
+
+    def test_build_repositories_seeds_existing_empty_database(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            db_path = directory / "bot.sqlite3"
+            db_path.touch()
+            initial_data_path = self.write_initial_data(directory)
+
+            repositories = bot.build_repositories(
+                db_path,
+                initial_data_path=initial_data_path,
+                backend="db",
+            )
+
+            self.assertEqual(
+                repositories.records.find(123, Activity.HOME, datetime.date(2026, 4, 6)).time,
+                RecordTime(datetime.date(2026, 4, 6), datetime.time(20, 42)),
+            )
+
+    def test_build_repositories_does_not_seed_non_empty_database(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            db_path = directory / "bot.sqlite3"
+            first_initial_data_path = self.write_initial_data(directory, time_value="20:42")
+            repositories = bot.build_repositories(
+                db_path,
+                initial_data_path=first_initial_data_path,
+                backend="db",
+            )
+            second_initial_data_path = self.write_initial_data(directory, time_value="19:30")
+
+            restarted_repositories = bot.build_repositories(
+                db_path,
+                initial_data_path=second_initial_data_path,
+                backend="db",
+            )
+
+            self.assertEqual(
+                restarted_repositories.records.find(
+                    123, Activity.HOME, datetime.date(2026, 4, 6)
+                ).time,
+                RecordTime(datetime.date(2026, 4, 6), datetime.time(20, 42)),
+            )
+            self.assertEqual(
+                repositories.records.find(123, Activity.HOME, datetime.date(2026, 4, 6)).time,
+                RecordTime(datetime.date(2026, 4, 6), datetime.time(20, 42)),
+            )
+
+    def test_build_repositories_memory_backend_seeds_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            initial_data_path = self.write_initial_data(Path(tmp))
+
+            repositories = bot.build_repositories(
+                initial_data_path=initial_data_path,
+                backend="memory",
+            )
+
+            week = WeekStart(datetime.date(2026, 4, 6))
+            self.assertEqual(
+                repositories.goals.find(123, Activity.HOME, week).target_time,
+                datetime.time(20, 10),
+            )
+            self.assertEqual(
+                repositories.records.find(123, Activity.HOME, datetime.date(2026, 4, 6)).time,
+                RecordTime(datetime.date(2026, 4, 6), datetime.time(20, 42)),
+            )
 
 
 class BotHelpersTest(unittest.TestCase):

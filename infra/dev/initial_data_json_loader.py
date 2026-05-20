@@ -5,15 +5,20 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Protocol
 
 from domain.ports import RecordRepository, WeekGoalRepository
 from domain.record import Record, RecordTime, WeekStart
 from domain.week_goal import WeekGoal
-from infra import InMemoryRepositories
 from infra.initial_data_format import DAY_INDEX, JSON_ACTIVITY
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INITIAL_DATA_PATH = _REPO_ROOT / "tests" / "initial-data.json"
+
+
+class RepositoryBundle(Protocol):
+    records: RecordRepository
+    goals: WeekGoalRepository
 
 
 def parse_initial_data_document(data: dict) -> tuple[int, list[dict]]:
@@ -70,7 +75,7 @@ def apply_parsed_week_block(
 
 
 def apply_initial_data_fixture(
-    repositories: InMemoryRepositories,
+    repositories: RepositoryBundle,
     *,
     json_path: Path | None = None,
 ) -> None:

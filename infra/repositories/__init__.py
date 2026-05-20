@@ -3,9 +3,19 @@ from infra.repositories.in_memory import (
     InMemoryRepositories,
     InMemoryWeekGoalRepository,
 )
+from infra.repositories.sqlite import (
+    SQLiteDatabase,
+    SQLiteRecordRepository,
+    SQLiteRepositories,
+    SQLiteWeekGoalRepository,
+)
 
 __all__ = [
     "InMemoryRecordRepository",
     "InMemoryRepositories",
     "InMemoryWeekGoalRepository",
+    "SQLiteDatabase",
+    "SQLiteRecordRepository",
+    "SQLiteRepositories",
+    "SQLiteWeekGoalRepository",
 ]
