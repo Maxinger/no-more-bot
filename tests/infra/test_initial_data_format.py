@@ -17,6 +17,28 @@ def week_payload_without_number(block: dict) -> dict:
     return {key: value for key, value in block.items() if key != "week"}
 
 
+def without_null_times(block: dict) -> dict:
+    """Drop JSON null goal/record times; null means absent after load/export."""
+    normalized = dict(block)
+    if "goals" in normalized:
+        goals = {key: value for key, value in normalized["goals"].items() if value is not None}
+        if goals:
+            normalized["goals"] = goals
+        else:
+            del normalized["goals"]
+    if "data" in normalized:
+        data: dict[str, dict[str, str]] = {}
+        for activity, days in normalized["data"].items():
+            kept = {day: hhmm for day, hhmm in days.items() if hhmm is not None}
+            if kept:
+                data[activity] = kept
+        if data:
+            normalized["data"] = data
+        else:
+            del normalized["data"]
+    return normalized
+
+
 class InitialDataFormatTest(unittest.TestCase):
     def test_build_document_matches_fixture_shape(self) -> None:
         fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
@@ -33,9 +55,10 @@ class InitialDataFormatTest(unittest.TestCase):
         self.assertEqual(document["user_id"], fixture["user_id"])
         self.assertEqual(len(document["weeks"]), len(fixture["weeks"]))
         for exported, original in zip(document["weeks"], fixture["weeks"], strict=True):
-            self.assertEqual(exported["startDate"], original["startDate"])
-            self.assertEqual(exported.get("goals"), original.get("goals"))
-            self.assertEqual(exported.get("data"), original.get("data"))
+            expected = without_null_times(original)
+            self.assertEqual(exported["startDate"], expected["startDate"])
+            self.assertEqual(exported.get("goals"), expected.get("goals"))
+            self.assertEqual(exported.get("data"), expected.get("data"))
 
     def test_roundtrip_through_use_case_and_serializer(self) -> None:
         fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
@@ -54,7 +77,8 @@ class InitialDataFormatTest(unittest.TestCase):
             block["startDate"]: week_payload_without_number(block) for block in exported["weeks"]
         }
         fixture_by_start = {
-            block["startDate"]: week_payload_without_number(block) for block in fixture["weeks"]
+            block["startDate"]: without_null_times(week_payload_without_number(block))
+            for block in fixture["weeks"]
         }
         self.assertEqual(exported_by_start, fixture_by_start)
 

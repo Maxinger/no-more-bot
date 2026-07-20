@@ -127,6 +127,40 @@ class InitialDataJsonLoaderTest(unittest.TestCase):
             RecordTime(datetime.date(2026, 4, 6), datetime.time(20, 42)),
         )
 
+    def test_null_goal_and_record_times_are_skipped(self) -> None:
+        records = InMemoryRecordRepository()
+        goals = InMemoryWeekGoalRepository()
+
+        apply_parsed_week_block(
+            records,
+            goals,
+            123,
+            {
+                "startDate": "2026-04-06",
+                "goals": {
+                    "work": "20:10",
+                    "sleep": None,
+                },
+                "data": {
+                    "work": {"mon": "20:42", "tue": None},
+                    "sleep": {"mon": None},
+                },
+            },
+        )
+
+        week = WeekStart(datetime.date(2026, 4, 6))
+        self.assertEqual(
+            goals.find(123, Activity.HOME, week).target_time,
+            datetime.time(20, 10),
+        )
+        self.assertIsNone(goals.find(123, Activity.BED, week))
+        self.assertEqual(
+            records.find(123, Activity.HOME, datetime.date(2026, 4, 6)).time,
+            RecordTime(datetime.date(2026, 4, 6), datetime.time(20, 42)),
+        )
+        self.assertIsNone(records.find(123, Activity.HOME, datetime.date(2026, 4, 7)))
+        self.assertIsNone(records.find(123, Activity.BED, datetime.date(2026, 4, 6)))
+
     def test_unknown_activity_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             apply_parsed_week_block(

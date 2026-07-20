@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Protocol
 
@@ -14,6 +14,11 @@ from infra.initial_data_format import DAY_INDEX, JSON_ACTIVITY
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INITIAL_DATA_PATH = _REPO_ROOT / "tests" / "initial-data.json"
+
+
+def _parse_hhmm(value: object) -> time:
+    """Parse a fixture ``HH:MM`` string into a ``time``."""
+    return datetime.strptime(str(value).strip(), "%H:%M").time()
 
 
 class RepositoryBundle(Protocol):
@@ -45,12 +50,14 @@ def apply_parsed_week_block(
     for key, hhmm in (block.get("goals") or {}).items():
         if key not in JSON_ACTIVITY:
             raise ValueError(f"unknown goal activity {key!r}")
+        if hhmm is None:
+            continue
         goals.save(
             WeekGoal(
                 user_id=user_id,
                 activity=JSON_ACTIVITY[key],
                 week=week,
-                target_time=datetime.strptime(str(hhmm).strip(), "%H:%M").time(),
+                target_time=_parse_hhmm(hhmm),
             )
         )
 
@@ -62,13 +69,15 @@ def apply_parsed_week_block(
             idx = DAY_INDEX.get(day_abbr.lower())
             if idx is None:
                 raise ValueError(f"unknown weekday {day_abbr!r}")
+            if hhmm is None:
+                continue
             records.save(
                 Record(
                     user_id=user_id,
                     activity=activity,
                     time=RecordTime(
                         date=week.value + timedelta(days=idx),
-                        time=datetime.strptime(str(hhmm).strip(), "%H:%M").time(),
+                        time=_parse_hhmm(hhmm),
                     ),
                 )
             )
