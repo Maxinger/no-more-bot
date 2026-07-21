@@ -887,7 +887,7 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             bot.week_details_text = original_week_details_text
 
         self.assertNotIn("Auto = suggested goal.", query.edits[0]["text"])
-        self.assertIn("HH:MM for Bed goal.", query.edits[0]["text"])
+        self.assertIn("HH:MM for 🛏️ goal.", query.edits[0]["text"])
         self.assertEqual(
             fake_week_details_text.calls[0][1:],
             (bot.Activity.BED, datetime.date(2026, 5, 14), None),

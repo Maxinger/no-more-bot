@@ -40,6 +40,7 @@ from representation import (
     WeekDetailsText,
 )
 from representation.formatting_utils import SEPARATOR
+from representation.icons import HOME_ICON, BED_ICON, TIME_ICON, GOALS_ICON, REPORTS_ICON
 
 logger = logging.getLogger(__name__)
 
@@ -156,12 +157,6 @@ export_user_data = ExportUserDataUseCase(repositories.goals, repositories.record
 initial_data_json_bytes = InitialDataJsonBytes()
 
 USER_DATA_PENDING_ACTION = "pending_action"
-HOME_ICON = "🏠"
-BED_ICON = "🛏️"
-TIME_ICON = "⏰"
-CALENDAR_ICON = "📅"
-GOALS_ICON = "🎯"
-REPORTS_ICON = "📊"
 BACK_TO_MENU_LABEL = "Back to Menu"
 BACK_TO_REPORTS_LABEL = "Back to Reports"
 
@@ -346,10 +341,6 @@ def current_week_for_user(user: User) -> WeekStart:
     return WeekStart.from_any_date(current_date_for_user(user))
 
 
-def activity_name(activity: Activity) -> str:
-    return "Home" if activity == Activity.HOME else "Bed"
-
-
 def activity_icon(activity: Activity) -> str:
     return HOME_ICON if activity == Activity.HOME else BED_ICON
 
@@ -383,7 +374,7 @@ def goal_set_screen_for_current_week(
         date=current_date,
         auto_progress=preview.progress if preview.is_auto else None,
     )
-    instructions = [f"HH:MM for {activity_name(activity)} goal."]
+    instructions = [f"HH:MM for {activity_icon(activity)} goal."]
     if preview.is_auto and preview.progress is not None:
         instructions.insert(0, "Auto = suggested goal.")
     return (
