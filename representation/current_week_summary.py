@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from application import LoadWeekProgressCommand, LoadWeekProgressUseCase
 from domain import Activity, User, WeekProgress, WeekStart
 from representation.formatting_utils import format_date, format_reward, format_time
+from representation.icons import HOME_ICON, BED_ICON
 
 CurrentDateTimeProvider = Callable[[], datetime]
-
-HOME_ICON = "🏠"
-BED_ICON = "🛏️"
 
 ACTIVITIES = (Activity.HOME, Activity.BED)
 ACTIVITY_LABELS = {

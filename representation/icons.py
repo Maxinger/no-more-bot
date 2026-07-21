@@ -1,0 +1,6 @@
+HOME_ICON = "🏠"
+BED_ICON = "🛏️"
+TIME_ICON = "⏰"
+CALENDAR_ICON = "📅"
+GOALS_ICON = "🎯"
+REPORTS_ICON = "📊"
