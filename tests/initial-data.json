@@ -237,8 +237,7 @@
       "week": 12,
       "startDate": "2026-06-15",
       "goals": {
-        "work": "20:25",
-        "sleep": "00:05"
+        "work": "20:25"
       },
       "data": {
         "work": {
