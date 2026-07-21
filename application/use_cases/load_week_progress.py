@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
 from application.use_case import UseCase, handles
@@ -93,9 +93,14 @@ class LoadWeekProgressUseCase(UseCase):
                 is_auto=False,
             )
 
-        previous_week = WeekStart(week.value - timedelta(days=7))
+        latest_goal = self._find_latest_goal_before_week(
+            command.user, command.activity, week
+        )
+        if latest_goal is None:
+            return LoadCurrentWeekGoalPreviewResult(progress=None, is_auto=False)
+
         previous_progress = self._load_progress(
-            command.user, command.activity, previous_week
+            command.user, command.activity, latest_goal.week
         )
         if previous_progress is None:
             return LoadCurrentWeekGoalPreviewResult(progress=None, is_auto=False)
@@ -103,7 +108,10 @@ class LoadWeekProgressUseCase(UseCase):
         recommended_goal = previous_progress.next_week_goal()
         records = self._records.find_for_week(command.user.id, command.activity, week)
         return LoadCurrentWeekGoalPreviewResult(
-            progress=WeekProgress(goal=recommended_goal, records=records),
+            progress=WeekProgress(
+                goal=replace(recommended_goal, week=week),
+                records=records,
+            ),
             is_auto=True,
         )
 
@@ -156,3 +164,13 @@ class LoadWeekProgressUseCase(UseCase):
 
         records = self._records.find_for_week(user.id, activity, week)
         return WeekProgress(goal=goal, records=records)
+
+    def _find_latest_goal_before_week(
+        self, user: User, activity: Activity, week: WeekStart
+    ):
+        matching_goals = (
+            goal
+            for goal in self._goals.find_all_for_user(user.id)
+            if goal.activity == activity and goal.week.value < week.value
+        )
+        return max(matching_goals, key=lambda goal: goal.week.value, default=None)
