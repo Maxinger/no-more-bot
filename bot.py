@@ -29,7 +29,7 @@ from application import (
     SetWeekGoalCommand,
     SetWeekGoalUseCase,
 )
-from domain.record import Activity, WeekStart
+from domain.record import Activity, RecordTime, WeekStart
 from domain.user import User
 from infra import InMemoryRepositories, SQLiteRepositories
 from infra.dev import DEFAULT_INITIAL_DATA_PATH, apply_initial_data_fixture
@@ -219,8 +219,8 @@ def past_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(f"{BED_ICON} Yesterday", callback_data="past_yesterday:bed"),
             ],
             [
-                InlineKeyboardButton(f"{HOME_ICON} Earlier", callback_data="past_date:home"),
-                InlineKeyboardButton(f"{BED_ICON} Earlier", callback_data="past_date:bed"),
+                InlineKeyboardButton(f"{HOME_ICON} Other", callback_data="past_date:home"),
+                InlineKeyboardButton(f"{BED_ICON} Other", callback_data="past_date:bed"),
             ],
             back_to_menu_row(),
         ]
@@ -300,6 +300,9 @@ def parse_hhmm(s: str) -> datetime.time | None:
         return None
 
 
+PAST_OTHER_FORMAT_HINT = "dd.mm.yyyy HH:MM, dd.mm HH:MM, or HH:MM for today"
+
+
 def parse_past_event_datetime(s: str) -> datetime.datetime | None:
     text = s.strip()
     current_year = datetime.datetime.now(datetime.timezone.utc).year
@@ -312,6 +315,23 @@ def parse_past_event_datetime(s: str) -> datetime.datetime | None:
             parsed = parsed.replace(year=current_year)
         return parsed.replace(tzinfo=datetime.timezone.utc)
     return None
+
+
+def parse_past_event_for_user(
+    s: str, user: User
+) -> tuple[datetime.date, datetime.time] | None:
+    text = s.strip()
+    time_value = parse_hhmm(text)
+    if time_value is not None:
+        today = current_date_for_user(user)
+        local_dt = datetime.datetime.combine(today, time_value, tzinfo=user.time_zone)
+        record_time = RecordTime.from_datetime(local_dt, user.time_zone)
+        return record_time.date, record_time.time
+
+    timestamp = parse_past_event_datetime(text)
+    if timestamp is None:
+        return None
+    return timestamp.date(), timestamp.time()
 
 
 def current_utc_datetime() -> datetime.datetime:
@@ -328,6 +348,10 @@ def current_week_for_user(user: User) -> WeekStart:
 
 def activity_name(activity: Activity) -> str:
     return "Home" if activity == Activity.HOME else "Bed"
+
+
+def activity_icon(activity: Activity) -> str:
+    return HOME_ICON if activity == Activity.HOME else BED_ICON
 
 
 def goals_report_for_current_week(user: User) -> str:
@@ -487,20 +511,21 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
         )
         return
 
-    if kind == "event_date":
-        timestamp = parse_past_event_datetime(text)
-        if timestamp is None:
+    if kind == "event_other":
+        parsed = parse_past_event_for_user(text, user)
+        if parsed is None:
             await update.message.reply_text(
-                "`dd.mm.yyyy HH:MM` or `dd.mm HH:MM`.",
+                PAST_OTHER_FORMAT_HINT,
                 reply_markup=pending_reply_markup(kind),
             )
             return
+        activity_date, activity_time = parsed
         result = record_activity.handle(
             RecordActivityForDayCommand(
                 user=user,
                 activity=activity,
-                activity_date=timestamp.date(),
-                activity_time=timestamp.time(),
+                activity_date=activity_date,
+                activity_time=activity_time,
             )
         )
         clear_pending_action(context)
@@ -563,11 +588,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         reply_markup = main_menu_keyboard()
     elif query.data == "menu:past":
         clear_pending_action(context)
-        text = (
-            "Past:\n\n"
-            f"• Yesterday: HH:MM\n"
-            f"• Earlier: `dd.mm.yyyy HH:MM` / `dd.mm HH:MM`"
-        )
+        text = "Input past events"
         reply_markup = past_menu_keyboard()
     elif query.data == "menu:reports":
         clear_pending_action(context)
@@ -671,7 +692,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             text = "Unknown activity."
         else:
             set_pending_action(context, "event_yesterday", activity)
-            text = f"Yesterday {activity_name(activity)}: HH:MM."
+            text = f"Supported formats for yesterday {activity_icon(activity)}: HH:MM"
             reply_markup = pending_reply_markup("event_yesterday")
     elif query.data.startswith("past_date:"):
         token = query.data.split(":", 1)[1]
@@ -679,9 +700,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if activity is None:
             text = "Unknown activity."
         else:
-            set_pending_action(context, "event_date", activity)
-            text = f"{activity_name(activity)}: `dd.mm.yyyy HH:MM` / `dd.mm HH:MM`."
-            reply_markup = pending_reply_markup("event_date")
+            set_pending_action(context, "event_other", activity)
+            text = f"Supported formats for {activity_icon(activity)}: {PAST_OTHER_FORMAT_HINT}"
+            reply_markup = pending_reply_markup("event_other")
     elif query.data == "export:data":
         clear_pending_action(context)
         result = export_user_data.handle(ExportUserDataCommand(user=user))

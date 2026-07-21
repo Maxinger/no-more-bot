@@ -436,7 +436,7 @@ class StartHandlerTest(unittest.IsolatedAsyncioTestCase):
         original_summary_text = bot.current_week_summary_text
         bot.current_week_summary_text = FakeCurrentWeekSummaryText()
         message = FakeMessage()
-        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_date"}})
+        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_other"}})
         update = types.SimpleNamespace(
             effective_user=types.SimpleNamespace(id=123, username="maxi"),
             effective_chat=types.SimpleNamespace(id=456),
@@ -540,7 +540,7 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         context = types.SimpleNamespace(
             user_data={
                 bot.USER_DATA_PENDING_ACTION: {
-                    "kind": "event_date",
+                    "kind": "event_other",
                     "activity": bot.Activity.BED,
                 }
             }
@@ -564,6 +564,131 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertEqual(message.replies[0]["text"], "Week details for going_to_bed on 2026-05-17")
         self.assertIsNotNone(message.replies[0]["reply_markup"])
+
+    async def test_past_other_hhmm_before_day_start_uses_previous_logical_day(self) -> None:
+        original_record_activity = bot.record_activity
+        original_week_details_text = bot.week_details_text
+        fake_record_activity = FakeRecordActivity()
+        fake_week_details_text = FakeWeekDetailsText()
+        bot.record_activity = fake_record_activity
+        bot.week_details_text = fake_week_details_text
+        message = FakeMessage()
+        context = types.SimpleNamespace(
+            user_data={
+                bot.USER_DATA_PENDING_ACTION: {
+                    "kind": "event_other",
+                    "activity": bot.Activity.HOME,
+                }
+            }
+        )
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            message=types.SimpleNamespace(text="02:30", reply_text=message.reply_text),
+        )
+
+        try:
+            with patch("bot.current_utc_datetime") as mock_now:
+                mock_now.return_value = datetime.datetime(
+                    2026, 5, 18, 9, 0, tzinfo=datetime.timezone.utc
+                )
+                await bot.maybe_handle_pending_input(update, context)
+        finally:
+            bot.record_activity = original_record_activity
+            bot.week_details_text = original_week_details_text
+
+        self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 17))
+        self.assertEqual(fake_record_activity.command.activity_time, datetime.time(2, 30))
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.Activity.HOME, datetime.date(2026, 5, 17), None)])
+
+    async def test_past_other_hhmm_at_tuesday_3am_assigns_early_time_to_monday(self) -> None:
+        original_record_activity = bot.record_activity
+        original_week_details_text = bot.week_details_text
+        fake_record_activity = FakeRecordActivity()
+        fake_week_details_text = FakeWeekDetailsText()
+        bot.record_activity = fake_record_activity
+        bot.week_details_text = fake_week_details_text
+        message = FakeMessage()
+        context = types.SimpleNamespace(
+            user_data={
+                bot.USER_DATA_PENDING_ACTION: {
+                    "kind": "event_other",
+                    "activity": bot.Activity.HOME,
+                }
+            }
+        )
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            message=types.SimpleNamespace(text="00:20", reply_text=message.reply_text),
+        )
+
+        try:
+            with patch("bot.current_utc_datetime") as mock_now:
+                mock_now.return_value = datetime.datetime(
+                    2026, 5, 19, 0, 0, tzinfo=datetime.timezone.utc
+                )
+                await bot.maybe_handle_pending_input(update, context)
+        finally:
+            bot.record_activity = original_record_activity
+            bot.week_details_text = original_week_details_text
+
+        self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 18))
+        self.assertEqual(fake_record_activity.command.activity_time, datetime.time(0, 20))
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.Activity.HOME, datetime.date(2026, 5, 18), None)])
+
+    async def test_past_other_hhmm_after_day_start_uses_today(self) -> None:
+        original_record_activity = bot.record_activity
+        original_week_details_text = bot.week_details_text
+        fake_record_activity = FakeRecordActivity()
+        fake_week_details_text = FakeWeekDetailsText()
+        bot.record_activity = fake_record_activity
+        bot.week_details_text = fake_week_details_text
+        message = FakeMessage()
+        context = types.SimpleNamespace(
+            user_data={
+                bot.USER_DATA_PENDING_ACTION: {
+                    "kind": "event_other",
+                    "activity": bot.Activity.BED,
+                }
+            }
+        )
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            message=types.SimpleNamespace(text="20:15", reply_text=message.reply_text),
+        )
+
+        try:
+            with patch("bot.current_utc_datetime") as mock_now:
+                mock_now.return_value = datetime.datetime(
+                    2026, 5, 18, 9, 0, tzinfo=datetime.timezone.utc
+                )
+                await bot.maybe_handle_pending_input(update, context)
+        finally:
+            bot.record_activity = original_record_activity
+            bot.week_details_text = original_week_details_text
+
+        self.assertEqual(fake_record_activity.command.activity_date, datetime.date(2026, 5, 18))
+        self.assertEqual(fake_record_activity.command.activity_time, datetime.time(20, 15))
+        self.assertEqual(fake_week_details_text.calls, [(123, bot.Activity.BED, datetime.date(2026, 5, 18), None)])
+
+    async def test_past_other_input_rejects_invalid_format(self) -> None:
+        message = FakeMessage()
+        context = types.SimpleNamespace(
+            user_data={
+                bot.USER_DATA_PENDING_ACTION: {
+                    "kind": "event_other",
+                    "activity": bot.Activity.HOME,
+                }
+            }
+        )
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            message=types.SimpleNamespace(text="not-a-date", reply_text=message.reply_text),
+        )
+
+        await bot.maybe_handle_pending_input(update, context)
+
+        self.assertIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
+        self.assertEqual(message.replies[0]["text"], bot.PAST_OTHER_FORMAT_HINT)
 
     async def test_goal_manual_input_saves_current_week_goal_and_shows_week_details(self) -> None:
         original_set_week_goal = bot.set_week_goal
@@ -641,7 +766,7 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             effective_user=types.SimpleNamespace(id=123),
             callback_query=query,
         )
-        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_date"}})
+        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_other"}})
 
         try:
             await bot.button_callback(update, context)
@@ -662,7 +787,7 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             effective_user=types.SimpleNamespace(id=123),
             callback_query=query,
         )
-        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_date"}})
+        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_other"}})
 
         try:
             with patch("bot.current_utc_datetime") as mock_now:
@@ -864,7 +989,7 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             effective_user=types.SimpleNamespace(id=123),
             callback_query=query,
         )
-        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_date"}})
+        context = types.SimpleNamespace(user_data={bot.USER_DATA_PENDING_ACTION: {"kind": "event_other"}})
 
         await bot.button_callback(update, context)
 
@@ -875,6 +1000,40 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             "report_this_week:home",
         )
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
+
+    async def test_past_menu_shows_other_buttons(self) -> None:
+        query = FakeCallbackQuery("menu:past")
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            callback_query=query,
+        )
+        context = types.SimpleNamespace(user_data={})
+
+        await bot.button_callback(update, context)
+
+        self.assertEqual(query.answers, 1)
+        self.assertIn("Input past events", query.edits[0]["text"])
+        markup = query.edits[0]["reply_markup"]
+        self.assertEqual(markup.inline_keyboard[1][0].text, "🏠 Other")
+        self.assertEqual(markup.inline_keyboard[1][1].text, "🛏️ Other")
+
+    async def test_past_other_button_prompts_for_all_formats(self) -> None:
+        query = FakeCallbackQuery("past_date:home")
+        update = types.SimpleNamespace(
+            effective_user=types.SimpleNamespace(id=123),
+            callback_query=query,
+        )
+        context = types.SimpleNamespace(user_data={})
+
+        await bot.button_callback(update, context)
+
+        self.assertEqual(query.answers, 1)
+        self.assertIn(bot.HOME_ICON, query.edits[0]["text"])
+        self.assertIn("HH:MM", query.edits[0]["text"])
+        self.assertEqual(
+            context.user_data[bot.USER_DATA_PENDING_ACTION],
+            {"kind": "event_other", "activity": bot.Activity.HOME},
+        )
 
     async def test_report_this_week_home_shows_week_details(self) -> None:
         original_week_details_text = bot.week_details_text

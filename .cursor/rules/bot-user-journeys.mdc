@@ -12,8 +12,8 @@ Use these numbers when discussing or changing bot behavior. Buttons are denoted 
 3. `[🛏️ Now]` -> Insert new bed record now -> Output bed week progress
 4. `[⏰ Past]` -> `[🏠 Yesterday]` -> Enter `HH:MM` -> Insert home record for yesterday -> Output yesterday's home week progress
 5. `[⏰ Past]` -> `[🛏️ Yesterday]` -> Enter `HH:MM` -> Insert bed record for yesterday -> Output yesterday's bed week progress
-6. `[⏰ Past]` -> `[🏠 Earlier]` -> Enter `dd.mm.yyyy HH:MM` or `dd.mm HH:MM` -> Insert home record for that date -> Output that week's home progress
-7. `[⏰ Past]` -> `[🛏️ Earlier]` -> Enter `dd.mm.yyyy HH:MM` or `dd.mm HH:MM` -> Insert bed record for that date -> Output that week's bed progress
+6. `[⏰ Past]` -> `[🏠 Other]` -> Enter `dd.mm.yyyy HH:MM`, `dd.mm HH:MM`, or `HH:MM` (today, with logical-day cutoff) -> Insert home record for that date -> Output that week's home progress
+7. `[⏰ Past]` -> `[🛏️ Other]` -> Enter `dd.mm.yyyy HH:MM`, `dd.mm HH:MM`, or `HH:MM` (today, with logical-day cutoff) -> Insert bed record for that date -> Output that week's bed progress
 8. `[🎯 Goals]` -> Output home and bed last-weeks reports separated by `===============` -> Show `[🏠 Set]`, `[🛏️ Set]`, and `[Back to Menu]`
 9. `[🎯 Goals]` -> `[🏠 Set]` -> Output current home week progress; if current goal is missing and previous week exists, show recommended `Goal: HH:MM (auto)` without saving -> Show `[Auto]` when available and `[Back to Menu]`
 10. `[🎯 Goals]` -> `[🛏️ Set]` -> Output current bed week progress; if current goal is missing and previous week exists, show recommended `Goal: HH:MM (auto)` without saving -> Show `[Auto]` when available and `[Back to Menu]`
