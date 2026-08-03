@@ -867,8 +867,13 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             fake_week_details_text.calls[0],
             (123, bot.Activity.HOME, datetime.date(2026, 5, 14), progress),
         )
-        self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][0].text, "Auto")
-        self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][0].callback_data, "goal_auto:home")
+        markup = query.edits[0]["reply_markup"]
+        self.assertEqual(markup.inline_keyboard[0][0].text, "Auto")
+        self.assertEqual(markup.inline_keyboard[0][0].callback_data, "goal_auto:home")
+        self.assertEqual(markup.inline_keyboard[1][0].text, "Back to Goals")
+        self.assertEqual(markup.inline_keyboard[1][0].callback_data, "menu:goals")
+        self.assertEqual(markup.inline_keyboard[1][1].text, "Back to Menu")
+        self.assertEqual(markup.inline_keyboard[1][1].callback_data, "menu:main")
         self.assertEqual(
             context.user_data[bot.USER_DATA_PENDING_ACTION],
             {"kind": "goal_manual", "activity": bot.Activity.HOME},
@@ -906,8 +911,12 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             fake_week_details_text.calls[0][1:],
             (bot.Activity.BED, datetime.date(2026, 5, 14), None),
         )
-        self.assertEqual(len(query.edits[0]["reply_markup"].inline_keyboard), 1)
-        self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][0].callback_data, "menu:main")
+        markup = query.edits[0]["reply_markup"]
+        self.assertEqual(len(markup.inline_keyboard), 1)
+        self.assertEqual(markup.inline_keyboard[0][0].text, "Back to Goals")
+        self.assertEqual(markup.inline_keyboard[0][0].callback_data, "menu:goals")
+        self.assertEqual(markup.inline_keyboard[0][1].text, "Back to Menu")
+        self.assertEqual(markup.inline_keyboard[0][1].callback_data, "menu:main")
 
     async def test_goal_auto_button_saves_recommended_goal_and_shows_week_details(self) -> None:
         original_load_week_progress = bot.load_week_progress

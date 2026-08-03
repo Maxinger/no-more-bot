@@ -15,8 +15,8 @@ Use these numbers when discussing or changing bot behavior. Buttons are denoted 
 6. `[⏰ Past]` -> `[🏠 Other]` -> Enter `dd.mm.yyyy HH:MM`, `dd.mm HH:MM`, or `HH:MM` (today, with logical-day cutoff) -> Insert home record for that date -> Output that week's home progress
 7. `[⏰ Past]` -> `[🛏️ Other]` -> Enter `dd.mm.yyyy HH:MM`, `dd.mm HH:MM`, or `HH:MM` (today, with logical-day cutoff) -> Insert bed record for that date -> Output that week's bed progress
 8. `[🎯 Goals]` -> Output home and bed last-weeks reports separated by `===============` -> Show `[🏠 Set]`, `[🛏️ Set]`, and `[Back to Menu]`
-9. `[🎯 Goals]` -> `[🏠 Set]` -> Output current home week progress; if current goal is missing and previous week exists, show recommended `Goal: HH:MM (auto)` without saving -> Show `[Auto]` when available and `[Back to Menu]`
-10. `[🎯 Goals]` -> `[🛏️ Set]` -> Output current bed week progress; if current goal is missing and previous week exists, show recommended `Goal: HH:MM (auto)` without saving -> Show `[Auto]` when available and `[Back to Menu]`
+9. `[🎯 Goals]` -> `[🏠 Set]` -> Output current home week progress; if current goal is missing and previous week exists, show recommended `Goal: HH:MM (auto)` without saving -> Show `[Auto]` when available and `[Back to Goals]` and `[Back to Menu]` on one row
+10. `[🎯 Goals]` -> `[🛏️ Set]` -> Output current bed week progress; if current goal is missing and previous week exists, show recommended `Goal: HH:MM (auto)` without saving -> Show `[Auto]` when available and `[Back to Goals]` and `[Back to Menu]` on one row
 11. `[🎯 Goals]` -> `[🏠 Set]` -> `[Auto]` -> Save recommended home goal -> Output current home week progress -> Show `[Back to Goals]` and `[Back to Menu]` on one row
 12. `[🎯 Goals]` -> `[🛏️ Set]` -> `[Auto]` -> Save recommended bed goal -> Output current bed week progress -> Show `[Back to Goals]` and `[Back to Menu]` on one row
 13. `[🎯 Goals]` -> `[🏠 Set]` -> Enter `HH:MM` -> Save current home week goal -> Output current home week progress -> Show `[Back to Goals]` and `[Back to Menu]` on one row

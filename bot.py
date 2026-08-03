@@ -207,15 +207,15 @@ def reports_navigation_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def goals_navigation_row() -> list[InlineKeyboardButton]:
+    return [
+        InlineKeyboardButton(BACK_TO_GOALS_LABEL, callback_data="menu:goals"),
+        InlineKeyboardButton(BACK_TO_MENU_LABEL, callback_data="menu:main"),
+    ]
+
+
 def goals_navigation_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(BACK_TO_GOALS_LABEL, callback_data="menu:goals"),
-                InlineKeyboardButton(BACK_TO_MENU_LABEL, callback_data="menu:main"),
-            ]
-        ]
-    )
+    return InlineKeyboardMarkup([goals_navigation_row()])
 
 
 def past_menu_keyboard() -> InlineKeyboardMarkup:
@@ -282,7 +282,7 @@ def goal_set_keyboard(activity: Activity, *, has_auto: bool) -> InlineKeyboardMa
                 )
             ]
         )
-    rows.append(back_to_menu_row())
+    rows.append(goals_navigation_row())
     return InlineKeyboardMarkup(rows)
 
 
