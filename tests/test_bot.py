@@ -239,6 +239,16 @@ class BotHelpersTest(unittest.TestCase):
         self.assertEqual(markup.inline_keyboard[0][1].text, "Back to Menu")
         self.assertEqual(markup.inline_keyboard[0][1].callback_data, "menu:main")
 
+    def test_goals_navigation_keyboard(self) -> None:
+        markup = bot.goals_navigation_keyboard()
+
+        self.assertEqual(len(markup.inline_keyboard), 1)
+        self.assertEqual(len(markup.inline_keyboard[0]), 2)
+        self.assertEqual(markup.inline_keyboard[0][0].text, "Back to Goals")
+        self.assertEqual(markup.inline_keyboard[0][0].callback_data, "menu:goals")
+        self.assertEqual(markup.inline_keyboard[0][1].text, "Back to Menu")
+        self.assertEqual(markup.inline_keyboard[0][1].callback_data, "menu:main")
+
     def test_reports_menu_keyboard(self) -> None:
         markup = bot.reports_menu_keyboard()
 
@@ -730,7 +740,11 @@ class PendingInputHandlerTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertEqual(message.replies[0]["text"], "Week details for going_home on 2026-05-14")
-        self.assertEqual(message.replies[0]["reply_markup"].inline_keyboard[0][0].callback_data, "menu:main")
+        markup = message.replies[0]["reply_markup"]
+        self.assertEqual(markup.inline_keyboard[0][0].text, "Back to Goals")
+        self.assertEqual(markup.inline_keyboard[0][0].callback_data, "menu:goals")
+        self.assertEqual(markup.inline_keyboard[0][1].text, "Back to Menu")
+        self.assertEqual(markup.inline_keyboard[0][1].callback_data, "menu:main")
 
     async def test_goal_manual_input_rejects_invalid_hhmm(self) -> None:
         message = FakeMessage()
@@ -935,7 +949,11 @@ class CallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn(bot.USER_DATA_PENDING_ACTION, context.user_data)
         self.assertEqual(query.edits[0]["text"], "Week details for going_to_bed on 2026-05-14")
-        self.assertEqual(query.edits[0]["reply_markup"].inline_keyboard[0][0].callback_data, "menu:main")
+        markup = query.edits[0]["reply_markup"]
+        self.assertEqual(markup.inline_keyboard[0][0].text, "Back to Goals")
+        self.assertEqual(markup.inline_keyboard[0][0].callback_data, "menu:goals")
+        self.assertEqual(markup.inline_keyboard[0][1].text, "Back to Menu")
+        self.assertEqual(markup.inline_keyboard[0][1].callback_data, "menu:main")
 
     async def test_export_button_sends_document_and_shows_confirmation(self) -> None:
         original_export_user_data = bot.export_user_data

@@ -17,10 +17,10 @@ Use these numbers when discussing or changing bot behavior. Buttons are denoted 
 8. `[🎯 Goals]` -> Output home and bed last-weeks reports separated by `===============` -> Show `[🏠 Set]`, `[🛏️ Set]`, and `[Back to Menu]`
 9. `[🎯 Goals]` -> `[🏠 Set]` -> Output current home week progress; if current goal is missing and previous week exists, show recommended `Goal: HH:MM (auto)` without saving -> Show `[Auto]` when available and `[Back to Menu]`
 10. `[🎯 Goals]` -> `[🛏️ Set]` -> Output current bed week progress; if current goal is missing and previous week exists, show recommended `Goal: HH:MM (auto)` without saving -> Show `[Auto]` when available and `[Back to Menu]`
-11. `[🎯 Goals]` -> `[🏠 Set]` -> `[Auto]` -> Save recommended home goal -> Output current home week progress
-12. `[🎯 Goals]` -> `[🛏️ Set]` -> `[Auto]` -> Save recommended bed goal -> Output current bed week progress
-13. `[🎯 Goals]` -> `[🏠 Set]` -> Enter `HH:MM` -> Save current home week goal -> Output current home week progress
-14. `[🎯 Goals]` -> `[🛏️ Set]` -> Enter `HH:MM` -> Save current bed week goal -> Output current bed week progress
+11. `[🎯 Goals]` -> `[🏠 Set]` -> `[Auto]` -> Save recommended home goal -> Output current home week progress -> Show `[Back to Goals]` and `[Back to Menu]` on one row
+12. `[🎯 Goals]` -> `[🛏️ Set]` -> `[Auto]` -> Save recommended bed goal -> Output current bed week progress -> Show `[Back to Goals]` and `[Back to Menu]` on one row
+13. `[🎯 Goals]` -> `[🏠 Set]` -> Enter `HH:MM` -> Save current home week goal -> Output current home week progress -> Show `[Back to Goals]` and `[Back to Menu]` on one row
+14. `[🎯 Goals]` -> `[🛏️ Set]` -> Enter `HH:MM` -> Save current bed week goal -> Output current bed week progress -> Show `[Back to Goals]` and `[Back to Menu]` on one row
 15. `[Back to Menu]` from any non-main-menu screen -> Output current week summary -> Show main menu
 16. `[📊 Reports]` -> Short intro -> Show `[🏠 This week]`, `[🛏️ This week]`, `[🏠 All]`, `[🛏️ All]`, `[Export]`, and `[Back to Menu]`
 17. `[📊 Reports]` -> `[🏠 This week]` -> Output WeekDetailsText for current home week -> Show `[Back to Reports]` and `[Back to Menu]` on one row

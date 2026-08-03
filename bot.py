@@ -159,6 +159,7 @@ initial_data_json_bytes = InitialDataJsonBytes()
 USER_DATA_PENDING_ACTION = "pending_action"
 BACK_TO_MENU_LABEL = "Back to Menu"
 BACK_TO_REPORTS_LABEL = "Back to Reports"
+BACK_TO_GOALS_LABEL = "Back to Goals"
 
 WELCOME = (
     "NoMoreBot.\n\n"
@@ -200,6 +201,17 @@ def reports_navigation_keyboard() -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton(BACK_TO_REPORTS_LABEL, callback_data="menu:reports"),
+                InlineKeyboardButton(BACK_TO_MENU_LABEL, callback_data="menu:main"),
+            ]
+        ]
+    )
+
+
+def goals_navigation_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(BACK_TO_GOALS_LABEL, callback_data="menu:goals"),
                 InlineKeyboardButton(BACK_TO_MENU_LABEL, callback_data="menu:main"),
             ]
         ]
@@ -553,7 +565,7 @@ async def maybe_handle_pending_input(update: Update, context: ContextTypes.DEFAU
                 activity=activity,
                 date=current_date_for_user(user),
             ),
-            reply_markup=back_to_menu_keyboard(),
+            reply_markup=goals_navigation_keyboard(),
         )
         return
 
@@ -651,7 +663,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     activity=activity,
                     date=current_date_for_user(user),
                 )
-                reply_markup = back_to_menu_keyboard()
+                reply_markup = goals_navigation_keyboard()
             else:
                 set_pending_action(context, "goal_manual", activity)
                 text, reply_markup = goal_set_screen_for_current_week(user, activity)
